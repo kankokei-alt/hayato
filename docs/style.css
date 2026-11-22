@@ -71,12 +71,12 @@ body {
 }
 .core-wrap {
   position: relative;
-  width: min(92vw, 50vh, 440px);
-  aspect-ratio: 4 / 5;
+  width: min(94vw, 48vh, 460px);
+  aspect-ratio: 1;
   flex-shrink: 1; min-height: 0;
 }
 /* 背景のホログラムリング（頭の後ろ） */
-#core { position: absolute; left: -6%; top: -4%; width: 112%; aspect-ratio: 1; }
+#core { position: absolute; left: -4%; top: -8%; width: 108%; aspect-ratio: 1; }
 .character { position: absolute; inset: 0; }
 .hud {
   display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -203,94 +203,26 @@ dialog { max-height: 88vh; overflow-y: auto; }
   .mic-ring { animation: none !important; }
 }
 
-/* ---------- ハヤトの立ち絵 ---------- */
-.hayato { width: 100%; height: 100%; overflow: visible; display: block; }
-.hayato * { transform-box: view-box; }
-.hayato .body { animation: breathe 4.2s ease-in-out infinite; transform-origin: 200px 500px; }
-.hayato .head { transform: rotate(var(--tilt, 0deg)); transform-origin: 200px 340px; transition: transform .45s cubic-bezier(.3, 1.4, .5, 1); }
-.hayato.pop .head { animation: pop .38s ease-out; }
-@keyframes breathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-3px) scale(1.004); } }
-@keyframes pop { 0% { translate: 0 0; } 40% { translate: 0 -8px; } 100% { translate: 0 0; } }
-
-/* 手描き風の太い輪郭線 */
-.hayato .ol { stroke: #2b2a31; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
-
-.hayato .sclera { fill: #fff; stroke: #2b2a31; stroke-width: 2; }
-.hayato .lid, .hayato .lash { fill: none; stroke: #2b2a31; stroke-linecap: round; }
-.hayato .lid { stroke-width: 5.5; }
-.hayato .lash { stroke-width: 4; }
-.hayato .teary-shine { display: none; }
-.hayato .eye-closed, .hayato .eye-happy, .hayato .eye-x, .hayato .eye-swirl { fill: none; stroke: #2b2a31; stroke-width: 5.5; stroke-linecap: round; display: none; }
-.hayato .eye-swirl { stroke-width: 3.5; }
-.hayato .iris { transition: transform .35s ease; }
-.hayato .eye-open { transform-origin: 160px 238px; transition: transform .15s; }
-.hayato .eye:is([data-mode="closed"], [data-mode="happy"], [data-mode="x"], [data-mode="swirl"]) .eye-open { display: none; }
-.hayato .eye[data-mode="closed"] .eye-closed { display: inline; }
-.hayato .eye[data-mode="happy"] .eye-happy { display: inline; }
-.hayato .eye[data-mode="x"] .eye-x { display: inline; }
-.hayato .eye[data-mode="swirl"] .eye-swirl { display: inline; animation: spin 1.6s linear infinite; transform-origin: 160px 238px; }
-.hayato .eye[data-mode="wide"] .eye-open { transform: scale(1.07, 1.1); }
-.hayato .eye[data-mode="narrow"] .eye-open { transform: scale(1.03, .8); }
-.hayato .eye[data-mode="teary"] .teary-shine { display: inline; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.hayato[data-pose="bow"] .head { transform: translateY(18px) scale(.97); }
-
-.hayato .brow { fill: none; stroke: #2b2a31; stroke-width: 7.5; stroke-linecap: round; }
-.hayato .mouth-line { fill: none; stroke: #2b2a31; stroke-width: 3.6; stroke-linecap: round; stroke-linejoin: round; }
-.hayato .mouth-inner { fill: #8c2f3b; }
-.hayato .tongue { fill: #ff8a96; }
-.hayato .teeth { fill: #fff; }
-.hayato .blush { transition: opacity .4s; }
-
-.hayato .circuit path { fill: none; stroke: #5ee6ff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-.hayato .circuit circle { fill: #5ee6ff; }
-.hayato .headset-light { fill: #7fe0ff; opacity: .85; animation: led 2.6s ease-in-out infinite; }
-@keyframes led { 50% { opacity: .5; } }
-body[data-state="thinking"] .hayato .circuit path { stroke: var(--accent-2); }
-body[data-state="thinking"] .hayato .circuit circle, body[data-state="thinking"] .hayato .headset-light { fill: var(--accent-2); }
-body[data-state="speaking"] .hayato .headset-light { fill: var(--accent-3); animation-duration: .7s; }
-
-.hayato .fx > *, .hayato .fx-hands, .hayato .fx-pale { display: none; }
-.hayato[data-fx="sparkle"] .fx-sparkle { display: inline; fill: #ffe38a; stroke: #2b2a31; stroke-width: 1.5; animation: twinkle 1s ease-in-out infinite alternate; transform-origin: 200px 160px; }
-.hayato[data-fx="signal"] .fx-signal { display: inline; fill: none; stroke: #7fe0ff; stroke-width: 4.5; stroke-linecap: round; }
-.hayato[data-fx="signal"] .fx-signal path { animation: flare .8s ease-in-out infinite alternate; }
-.hayato[data-fx="dots"] .fx-dots { display: inline; fill: #c9d6e4; stroke: #2b2a31; stroke-width: 1.5; }
-.hayato[data-fx="dots"] .fx-dots circle { animation: dot 1.2s ease-in-out infinite; }
-.hayato[data-fx="dots"] .fx-dots circle:nth-child(2) { animation-delay: .2s; }
-.hayato[data-fx="dots"] .fx-dots circle:nth-child(3) { animation-delay: .4s; }
-.hayato[data-fx="bang"] .fx-bang { display: inline; stroke: #ff5a5a; fill: #ff5a5a; stroke-linecap: round; }
-.hayato[data-fx="confused"] .fx-confused { display: inline; }
-.hayato .fx-ex { stroke: #ff6a6a; stroke-width: 8; stroke-linecap: round; fill: none; }
-.hayato .fx-ex-dot { fill: #ff6a6a; }
-.hayato .fx-q { stroke: #5aa8ff; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-.hayato .fx-q-dot { fill: #5aa8ff; }
-/* 追加の表情 */
-.hayato[data-fx="idea"] .fx-idea { display: inline; }
-.hayato .fx-idea .rays { fill: none; stroke: #ffc93c; stroke-width: 4; stroke-linecap: round; animation: flare .6s ease-in-out infinite alternate; }
-.hayato[data-fx="error"] :is(.fx-error, .fx-confused, .fx-glitch) { display: inline; }
-.hayato .fx-errtext { font: 900 44px/1 "Arial Black", "Hiragino Sans", sans-serif; fill: #ff5d4d; stroke: #2b2a31; stroke-width: 2.5; paint-order: stroke; letter-spacing: 2px; }
-.hayato[data-fx="panic"] :is(.fx-panic, .fx-glitch, .fx-pale) { display: inline; }
-.hayato .fx-glitch rect { fill: #9aa6b6; opacity: .55; animation: glitch .35s steps(2) infinite; }
-.hayato .fx-glitch rect:nth-child(even) { animation-delay: .15s; }
-@keyframes glitch { 0% { transform: translateX(0); opacity: .6; } 50% { transform: translateX(8px); opacity: .25; } 100% { transform: translateX(-6px); opacity: .55; } }
-.hayato[data-fx="panic"] .head { animation: shake .25s linear infinite; }
-@keyframes shake { 0%, 100% { translate: 0 0; } 25% { translate: -2px 1px; } 75% { translate: 2px -1px; } }
-.hayato[data-fx="convinced"] .fx-convinced { display: inline; }
-.hayato .fx-word { font: 800 26px/1 "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif; fill: #e9f2fb; stroke: #2b2a31; stroke-width: 4; paint-order: stroke; }
-.hayato .fx-small { font: 700 13px/1 "Hiragino Sans", sans-serif; fill: #7fe0ff; }
-.hayato .fx-bar { fill: #7fe0ff; transform-origin: 303px 24px; animation: load 1.6s ease-in-out infinite; }
-@keyframes load { from { transform: scaleX(.1); } to { transform: scaleX(1); } }
-.hayato[data-fx="please"] :is(.fx-hands, .fx-sparkle) { display: inline; }
-.hayato[data-fx="please"] .fx-sparkle { fill: #ffe38a; stroke: #2b2a31; stroke-width: 1.5; animation: twinkle 1s ease-in-out infinite alternate; transform-origin: 200px 160px; }
-.hayato[data-fx="relieved"] .fx-relieved { display: inline; }
-.hayato .fx-relieved .steam { fill: none; stroke: #c9d6e4; stroke-width: 3; stroke-linecap: round; animation: flare 1.2s ease-in-out infinite alternate; }
-.hayato[data-fx="bow"] .fx-bow { display: inline; fill: none; stroke: #c9d6e4; stroke-width: 3.5; stroke-linecap: round; }
-.hayato[data-fx="tear"] .fx-tear, .hayato[data-fx="confused"] .fx-tear { display: inline; fill: #a9e1ff; stroke: #2b2a31; stroke-width: 2; animation: drip 1.8s ease-in infinite; }
-@keyframes drip { 0% { transform: translateY(-4px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(12px); opacity: 0; } }
-@keyframes twinkle { from { opacity: .45; transform: scale(.92); } to { opacity: 1; transform: scale(1.05); } }
-@keyframes flare { from { opacity: .4; } to { opacity: 1; } }
-@keyframes dot { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .hayato .body, .hayato .headset-light, .hayato .fx * { animation: none !important; }
+/* ---------- ハヤトの立ち絵（表情ごとの画像を切り替え） ---------- */
+.hayato-figure { position: absolute; inset: 0; animation: breathe 4.2s ease-in-out infinite; }
+.hayato-figure img {
+  position: absolute; display: block; height: auto; max-width: none;
+  opacity: 0; transition: opacity .18s ease;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: none;
+  /* 暗い背景でも輪郭が沈まないよう、シールのような白いふち取り */
+  filter: drop-shadow(0 0 .6px #fff) drop-shadow(0 0 .6px #fff) drop-shadow(0 0 10px rgba(120, 220, 255, .25));
+  /* 切り抜きの端（上下左右）をぼかして、四角く切れた跡を見せない */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%), linear-gradient(#000 80%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%), linear-gradient(#000 80%, transparent 100%);
+  mask-composite: intersect;
 }
-.character { -webkit-mask-image: linear-gradient(#000 78%, transparent 99%); mask-image: linear-gradient(#000 78%, transparent 99%); }
+.hayato-figure img.active { opacity: 1; }
+.hayato-figure.pop img.active { animation: pop .36s ease-out; }
+.hayato-figure.talking img.active { animation: talk .26s ease-in-out infinite alternate; }
+@keyframes breathe { 0%, 100% { translate: 0 0; } 50% { translate: 0 -1.2%; } }
+@keyframes pop { 0% { scale: .96; } 45% { scale: 1.05; } 100% { scale: 1; } }
+@keyframes talk { from { scale: 1; rotate: -.4deg; } to { scale: 1.025 1.012; rotate: .5deg; } }
+@media (prefers-reduced-motion: reduce) {
+  .hayato-figure, .hayato-figure img.active { animation: none !important; }
+}

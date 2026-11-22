@@ -1,6 +1,6 @@
 // オフラインでも画面だけは開けるように、静的ファイルをキャッシュする。API はキャッシュしない。
-const CACHE = "hayato-v6";
-const SHELL = ["./", "index.html", "style.css", "app.js", "agent.js", "character.js", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png"];
+const CACHE = "hayato-v8";
+const SHELL = ["./", "index.html", "style.css", "app.js", "agent.js", "character.js", "hayato/neutral.webp", "hayato/smile.webp", "hayato/fired.webp", "hayato/error.webp", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
