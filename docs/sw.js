@@ -1,6 +1,6 @@
 // オフラインでも画面だけは開けるように、静的ファイルをキャッシュする。API はキャッシュしない。
-const CACHE = "hayato-v2";
-const SHELL = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png"];
+const CACHE = "hayato-v3";
+const SHELL = ["./", "index.html", "style.css", "app.js", "agent.js", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -16,7 +16,6 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
-  if (url.pathname.includes("/api/") || url.pathname.includes("/auth/")) return;
   // 新しい版を優先し、つながらないときだけキャッシュを使う
   e.respondWith(
     fetch(e.request)

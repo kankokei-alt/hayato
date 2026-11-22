@@ -163,10 +163,13 @@ dialog {
   border: 1px solid var(--line); background: var(--bg-2); color: var(--text);
 }
 dialog::backdrop { background: rgba(0, 0, 0, .6); backdrop-filter: blur(4px); }
+dialog { max-height: 88vh; overflow-y: auto; }
 .settings-form { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
 .settings-form h2 { margin: 0; font-size: 16px; letter-spacing: .1em; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
-.field input[type="password"], .field select {
+.field small { font-size: 11.5px; line-height: 1.6; }
+.field a { color: var(--accent); }
+.field input[type="password"], .field input[type="text"], .field select {
   padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--bg); color: var(--text); font: inherit; font-size: 16px;
 }

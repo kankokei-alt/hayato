@@ -1,20 +1,48 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
+import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { defineTool } from "./types.js";
+import { load, save } from "./storage.js";
 
-// メモとタスクは data/memory.json に保存する（このファイルは git に含めない）。
-const DATA_DIR = path.resolve(process.env.HAYATO_DATA_DIR ?? "data");
-const FILE = path.join(DATA_DIR, "memory.json");
+/** ハヤトが使う自前ツール（iPhoneの中で実行するもの）。 */
+export interface HayatoTool {
+  name: string;
+  /** 画面に出す「〜中」の表示 */
+  label: string;
+  description: string;
+  schema: z.ZodObject;
+  run: (input: any) => Promise<string> | string;
+}
 
-interface Note {
+function defineTool<S extends z.ZodObject>(tool: {
+  name: string;
+  label: string;
+  description: string;
+  schema: S;
+  run: (input: z.infer<S>) => Promise<string> | string;
+}): HayatoTool {
+  return tool;
+}
+
+/** Claude API に渡すツール定義へ変換する。 */
+export function toApiTool(tool: HayatoTool): Anthropic.Beta.BetaTool {
+  const { $schema: _ignored, ...schema } = z.toJSONSchema(tool.schema) as Record<string, unknown>;
+  return {
+    name: tool.name,
+    description: tool.description,
+    input_schema: schema as Anthropic.Beta.BetaTool.InputSchema,
+    // ストリーミングでツール入力を逐次受け取る。入力は実行前に zod で検証する（agent.ts）。
+    eager_input_streaming: true,
+  };
+}
+
+// ---------- メモとタスク（iPhoneの中に保存） ----------
+
+export interface Note {
   id: string;
   text: string;
   tags: string[];
   createdAt: string;
 }
-interface Task {
+export interface Task {
   id: string;
   title: string;
   due?: string;
@@ -22,44 +50,50 @@ interface Task {
   createdAt: string;
   doneAt?: string;
 }
-interface Store {
+export interface MemoryData {
   notes: Note[];
   tasks: Task[];
 }
 
-let cache: Store | null = null;
-let writing: Promise<void> = Promise.resolve();
+const KEY = "memory";
 
-async function load(): Promise<Store> {
-  if (cache) return cache;
-  try {
-    const parsed = JSON.parse(await fs.readFile(FILE, "utf8")) as Partial<Store>;
-    cache = { notes: parsed.notes ?? [], tasks: parsed.tasks ?? [] };
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    cache = { notes: [], tasks: [] };
-  }
-  return cache;
+export function loadMemory(): MemoryData {
+  const m = load<Partial<MemoryData>>(KEY, {});
+  return { notes: m.notes ?? [], tasks: m.tasks ?? [] };
 }
 
-async function save(store: Store): Promise<void> {
-  // 書き込みを直列化して、同時に呼ばれてもファイルが壊れないようにする
-  writing = writing.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const tmp = `${FILE}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(store, null, 2), "utf8");
-    await fs.rename(tmp, FILE);
-  });
-  return writing;
+function saveMemory(m: MemoryData): void {
+  if (!save(KEY, m)) throw new Error("iPhoneに保存できませんでした（空き容量やプライベートブラウズを確認）。");
 }
 
-const shortId = () => randomUUID().slice(0, 8);
+/** バックアップから読み込む（設定画面で使う） */
+export function importMemory(data: unknown): MemoryData {
+  const parsed = z
+    .object({
+      notes: z.array(z.object({ id: z.string(), text: z.string(), tags: z.array(z.string()), createdAt: z.string() })),
+      tasks: z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          due: z.string().optional(),
+          done: z.boolean(),
+          createdAt: z.string(),
+          doneAt: z.string().optional(),
+        }),
+      ),
+    })
+    .parse(data);
+  saveMemory(parsed);
+  return parsed;
+}
+
+const shortId = () => (crypto.randomUUID?.() ?? Math.random().toString(16).slice(2) + Date.now().toString(16)).slice(0, 8);
 
 function fmtTask(t: Task): string {
   return `[${t.id}] ${t.done ? "（完了）" : ""}${t.title}${t.due ? ` / 期限: ${t.due}` : ""}`;
 }
 
-export const memoryTools = [
+export const localTools: HayatoTool[] = [
   defineTool({
     name: "add_note",
     label: "メモを記録中",
@@ -69,11 +103,11 @@ export const memoryTools = [
       text: z.string().min(1).describe("メモの本文。後で読んで分かるように具体的に書く"),
       tags: z.array(z.string()).optional().describe("分類用のタグ（例: 仕事, 買い物, 好み）"),
     }),
-    run: async ({ text, tags }) => {
-      const store = await load();
+    run: ({ text, tags }) => {
+      const m = loadMemory();
       const note: Note = { id: shortId(), text, tags: tags ?? [], createdAt: new Date().toISOString() };
-      store.notes.push(note);
-      await save(store);
+      m.notes.push(note);
+      saveMemory(m);
       return `メモを保存しました（id: ${note.id}）`;
     },
   }),
@@ -83,13 +117,13 @@ export const memoryTools = [
     description:
       "保存済みのメモをキーワードで探す。キーワードを空にすると最近のメモを返す。過去の会話や持ち主の好みを思い出すときに使う。",
     schema: z.object({
-      query: z.string().describe("探したい言葉。空文字なら最近のメモ"),
+      query: z.string().describe("探したい言葉（スペース区切りで AND 検索）。空文字なら最近のメモ"),
       limit: z.number().int().min(1).max(50).optional().describe("最大件数（既定 10）"),
     }),
-    run: async ({ query, limit }) => {
-      const store = await load();
+    run: ({ query, limit }) => {
+      const m = loadMemory();
       const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-      const hits = store.notes
+      const hits = m.notes
         .filter((n) => {
           const hay = `${n.text} ${n.tags.join(" ")}`.toLowerCase();
           return words.every((w) => hay.includes(w));
@@ -107,12 +141,12 @@ export const memoryTools = [
     label: "メモを削除中",
     description: "id を指定してメモを削除する。持ち主が削除を望んだときだけ使う。",
     schema: z.object({ id: z.string().describe("search_notes で得た id") }),
-    run: async ({ id }) => {
-      const store = await load();
-      const before = store.notes.length;
-      store.notes = store.notes.filter((n) => n.id !== id);
-      if (store.notes.length === before) return `id ${id} のメモは見つかりません。`;
-      await save(store);
+    run: ({ id }) => {
+      const m = loadMemory();
+      const before = m.notes.length;
+      m.notes = m.notes.filter((n) => n.id !== id);
+      if (m.notes.length === before) return `id ${id} のメモは見つかりません。`;
+      saveMemory(m);
       return `メモ ${id} を削除しました。`;
     },
   }),
@@ -124,11 +158,11 @@ export const memoryTools = [
       title: z.string().min(1).describe("タスクの内容"),
       due: z.string().optional().describe("期限（YYYY-MM-DD または YYYY-MM-DDTHH:mm）。なければ省略"),
     }),
-    run: async ({ title, due }) => {
-      const store = await load();
+    run: ({ title, due }) => {
+      const m = loadMemory();
       const task: Task = { id: shortId(), title, due, done: false, createdAt: new Date().toISOString() };
-      store.tasks.push(task);
-      await save(store);
+      m.tasks.push(task);
+      saveMemory(m);
       return `タスクを追加しました: ${fmtTask(task)}`;
     },
   }),
@@ -139,9 +173,8 @@ export const memoryTools = [
     schema: z.object({
       include_done: z.boolean().optional().describe("完了済みも含めるなら true"),
     }),
-    run: async ({ include_done }) => {
-      const store = await load();
-      const tasks = store.tasks.filter((t) => include_done || !t.done);
+    run: ({ include_done }) => {
+      const tasks = loadMemory().tasks.filter((t) => include_done || !t.done);
       if (tasks.length === 0) return include_done ? "タスクはありません。" : "未完了のタスクはありません。";
       return tasks.map(fmtTask).join("\n");
     },
@@ -151,13 +184,13 @@ export const memoryTools = [
     label: "タスクを完了に更新中",
     description: "id を指定してタスクを完了にする。",
     schema: z.object({ id: z.string().describe("list_tasks で得た id") }),
-    run: async ({ id }) => {
-      const store = await load();
-      const task = store.tasks.find((t) => t.id === id);
+    run: ({ id }) => {
+      const m = loadMemory();
+      const task = m.tasks.find((t) => t.id === id);
       if (!task) return `id ${id} のタスクは見つかりません。`;
       task.done = true;
       task.doneAt = new Date().toISOString();
-      await save(store);
+      saveMemory(m);
       return `完了にしました: ${task.title}`;
     },
   }),

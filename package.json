@@ -2,27 +2,20 @@
   "name": "hayato",
   "version": "0.1.0",
   "private": true,
-  "description": "音声で会話できる擬人化AIエージェント「ハヤト」",
+  "description": "iPhoneだけで音声会話できるAIエージェント「ハヤト」",
   "type": "module",
   "scripts": {
-    "start": "tsx server/index.ts",
-    "dev": "tsx watch server/index.ts",
-    "typecheck": "tsc --noEmit"
-  },
-  "engines": {
-    "node": ">=20"
+    "build": "esbuild src/agent.ts --bundle --format=esm --target=safari16 --minify --legal-comments=linked --outfile=docs/agent.js",
+    "typecheck": "tsc --noEmit",
+    "serve": "npx --yes http-server docs -p 8080 -c-1"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",
-    "dotenv": "^18.0.10",
-    "express": "^5.3.0",
-    "googleapis": "^190.0.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
-    "tsx": "^4.23.15",
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
   }
 }

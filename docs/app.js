@@ -1,4 +1,5 @@
-// ハヤト クライアント: 音声認識 → サーバー（Claude）→ 音声合成 の流れと、中央コアのアニメーション。
+// ハヤト: 音声認識 → Claude（iPhoneから直接呼ぶ）→ 音声合成 の流れと、中央コアのアニメーション。
+import * as agent from "./agent.js";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -7,11 +8,12 @@ const els = {
   mic: $("micBtn"), autoListen: $("autoListen"),
   textForm: $("textForm"), textInput: $("textInput"),
   log: $("log"), logBody: $("logBody"), logToggle: $("logToggle"), resetBtn: $("resetBtn"),
-  settings: $("settings"), settingsBtn: $("settingsBtn"), passcode: $("passcode"),
+  settings: $("settings"), settingsBtn: $("settingsBtn"), apiKey: $("apiKey"),
+  callName: $("callName"), effort: $("effort"),
   voiceSelect: $("voiceSelect"), rate: $("rate"), rateOut: $("rateOut"),
   pitch: $("pitch"), pitchOut: $("pitchOut"), testVoice: $("testVoice"),
-  calStatus: $("calStatus"), calConnect: $("calConnect"), calHint: $("calHint"), brandName: $("brandName"),
-  keyboardBtn: $("keyboardBtn"),
+  keyboardBtn: $("keyboardBtn"), memoryCount: $("memoryCount"),
+  exportBtn: $("exportBtn"), importBtn: $("importBtn"), importFile: $("importFile"),
 };
 
 // ---------- 端末ごとの設定（localStorage は使えないこともあるので必ず try で囲む） ----------
@@ -26,18 +28,18 @@ const store = {
 };
 
 const settings = {
-  passcode: store.get("passcode", ""),
+  apiKey: store.get("apiKey", ""),
+  callName: store.get("callName", ""),
+  effort: store.get("effort", "low"),
   voiceURI: store.get("voiceURI", ""),
   rate: store.get("rate", 1.1),
   pitch: store.get("pitch", 0.9),
   autoListen: store.get("autoListen", false),
 };
-let conversationId = store.get("conversationId", null) || newConversationId();
-function newConversationId() {
-  const id = (crypto.randomUUID?.() ?? String(Date.now()) + Math.random().toString(16).slice(2));
-  store.set("conversationId", id);
-  return id;
+function applyAgentSettings() {
+  agent.configure({ apiKey: settings.apiKey.trim(), userCallName: settings.callName, effort: settings.effort });
 }
+applyAgentSettings();
 
 // ---------- 状態 ----------
 const STATE_TEXT = {
@@ -253,9 +255,8 @@ function stopListening() {
   try { recognition?.stop(); } catch { /* noop */ }
 }
 
-// ---------- サーバーとの通信 ----------
+// ---------- Claude との会話 ----------
 let currentRequest = null;
-const OFFLINE_MESSAGE = "パソコンのハヤトにつながりません。パソコンが起動していて、ハヤトとTailscaleが動いているか確認してください";
 
 async function send(text) {
   currentRequest?.abort();
@@ -272,6 +273,7 @@ async function send(text) {
   let reply = "";
   let pending = ""; // まだ読み上げていない文の断片
   let bubble = null; // ログ上の今の返答の吹き出し（ツール実行をはさむと新しい吹き出しにする）
+  let failure = null;
 
   const flushSentences = (force = false) => {
     // 句点・感嘆符・改行で区切って、文ごとに読み上げを始める（全文を待たないので応答が速く感じる）
@@ -282,58 +284,41 @@ async function send(text) {
     if (force && pending.trim()) { enqueueSpeech(pending); pending = ""; }
   };
 
-  try {
-    const res = await fetch("api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-hayato-passcode": els.passcode.value },
-      body: JSON.stringify({ conversationId, text }),
-      signal: controller.signal,
-    });
-    if (res.status === 401) throw new Error("パスコードが違います。右上の設定から入力してください");
-    if (!res.ok || !res.body) throw new Error(`サーバーエラー（${res.status}）`);
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) >= 0) {
-        const chunk = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        if (!chunk.startsWith("data: ")) continue;
-        const ev = JSON.parse(chunk.slice(6));
-        if (ev.type === "text") {
-          reply += ev.text;
-          pending += ev.text;
-          els.hayatoText.textContent = reply;
-          bubble ??= addLog("assistant", "");
-          bubble.textContent += ev.text;
-          flushSentences();
-        } else if (ev.type === "tool") {
-          flushSentences(true);
-          if (!speaking) setState("thinking");
-          els.activity.textContent = `${ev.label}…`;
-          addLog("tool", `▸ ${ev.label}`);
-          bubble = null;
-          // ツールの前後の文が続けて表示されるよう区切りを入れる
-          if (reply && !/\s$/.test(reply)) reply += " ";
-        } else if (ev.type === "error") {
-          throw new Error(ev.message);
-        }
-      }
-    }
-    flushSentences(true);
-  } catch (err) {
+  const onEvent = (ev) => {
     if (controller.signal.aborted) return;
-    if (err instanceof TypeError) err = new Error(OFFLINE_MESSAGE); // fetch 自体が失敗 = サーバーに届かない
-    stopSpeaking();
-    setState("error", err.message);
-    addLog("error", err.message);
-    lastError = err.message;
-    enqueueSpeech(err.message);
+    if (ev.type === "text") {
+      reply += ev.text;
+      pending += ev.text;
+      els.hayatoText.textContent = reply;
+      bubble ??= addLog("assistant", "");
+      bubble.textContent += ev.text;
+      flushSentences();
+    } else if (ev.type === "tool") {
+      flushSentences(true);
+      if (!speaking) setState("thinking");
+      els.activity.textContent = `${ev.label}…`;
+      addLog("tool", `▸ ${ev.label}`);
+      bubble = null;
+      // ツールの前後の文が続けて表示されるよう区切りを入れる
+      if (reply && !/\s$/.test(reply)) reply += " ";
+    } else if (ev.type === "error") {
+      failure = ev;
+    }
+  };
+
+  try {
+    await agent.runTurn(text, onEvent, controller.signal);
+    if (controller.signal.aborted) return;
+    if (failure) {
+      stopSpeaking();
+      setState("error", failure.message);
+      addLog("error", failure.message);
+      lastError = failure.message;
+      enqueueSpeech(failure.message);
+      if (failure.kind === "auth") els.settings.showModal();
+    } else {
+      flushSentences(true);
+    }
   } finally {
     if (currentRequest === controller) currentRequest = null;
     streamDone = true;
@@ -414,28 +399,33 @@ els.logToggle.addEventListener("click", () => {
   els.logToggle.setAttribute("aria-pressed", String(!els.log.hidden));
 });
 
-els.resetBtn.addEventListener("click", async () => {
+els.resetBtn.addEventListener("click", () => {
   currentRequest?.abort();
   stopSpeaking();
-  const old = conversationId;
-  conversationId = newConversationId();
+  agent.resetConversation(); // メモとタスクは消えない
   els.logBody.innerHTML = "";
   els.youText.textContent = "";
   els.hayatoText.textContent = "";
   setState("idle", "新しい会話を始めました");
-  fetch("api/reset", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-hayato-passcode": els.passcode.value },
-    body: JSON.stringify({ conversationId: old }),
-  }).catch(() => {});
 });
 
 // 設定ダイアログ
-els.passcode.value = settings.passcode;
+els.apiKey.value = settings.apiKey;
+els.callName.value = settings.callName;
+els.effort.value = settings.effort;
 els.rate.value = settings.rate; els.rateOut.textContent = settings.rate;
 els.pitch.value = settings.pitch; els.pitchOut.textContent = settings.pitch;
-els.settingsBtn.addEventListener("click", () => { refreshStatus(); els.settings.showModal(); });
-els.passcode.addEventListener("change", () => { store.set("passcode", els.passcode.value); refreshStatus(); });
+els.settingsBtn.addEventListener("click", () => { refreshMemoryCount(); els.settings.showModal(); });
+els.settings.addEventListener("close", () => {
+  settings.apiKey = els.apiKey.value.trim();
+  settings.callName = els.callName.value.trim();
+  settings.effort = els.effort.value;
+  store.set("apiKey", settings.apiKey);
+  store.set("callName", settings.callName);
+  store.set("effort", settings.effort);
+  applyAgentSettings();
+  if (settings.apiKey && state === "error") setState("idle", "マイクをタップ");
+});
 els.voiceSelect.addEventListener("change", () => store.set("voiceURI", els.voiceSelect.value));
 els.rate.addEventListener("input", () => { els.rateOut.textContent = els.rate.value; store.set("rate", Number(els.rate.value)); });
 els.pitch.addEventListener("input", () => { els.pitchOut.textContent = els.pitch.value; store.set("pitch", Number(els.pitch.value)); });
@@ -444,42 +434,48 @@ els.testVoice.addEventListener("click", () => {
   stopSpeaking();
   enqueueSpeech("準備はできています。いつでもどうぞ。");
 });
-els.calConnect.addEventListener("click", () => {
-  location.href = `auth/google?passcode=${encodeURIComponent(els.passcode.value)}`;
+
+// メモとタスクのバックアップ（機種変更や、万一消えたときのため）
+function refreshMemoryCount() {
+  const m = agent.loadMemory();
+  els.memoryCount.textContent = `メモ ${m.notes.length}件・タスク ${m.tasks.filter((t) => !t.done).length}件`;
+}
+els.exportBtn.addEventListener("click", async () => {
+  const json = JSON.stringify(agent.loadMemory(), null, 2);
+  const file = new File([json], `hayato-backup-${new Date().toISOString().slice(0, 10)}.json`, { type: "application/json" });
+  try {
+    // iPhone では共有シートが開き、「ファイルに保存」でiCloud Driveなどに保存できる
+    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(file);
+  a.download = file.name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+});
+els.importBtn.addEventListener("click", () => els.importFile.click());
+els.importFile.addEventListener("change", async () => {
+  const file = els.importFile.files?.[0];
+  els.importFile.value = "";
+  if (!file) return;
+  try {
+    agent.importMemory(JSON.parse(await file.text()));
+    refreshMemoryCount();
+    alert("バックアップを読み込みました");
+  } catch {
+    alert("読み込めませんでした。ハヤトのバックアップファイルか確認してください");
+  }
 });
 
-async function refreshStatus() {
-  try {
-    const res = await fetch("api/status", { headers: { "x-hayato-passcode": els.passcode.value } });
-    if (res.status === 401) {
-      els.calStatus.textContent = "パスコードを入力してください";
-      return false;
-    }
-    const s = await res.json();
-    if (s.name) els.brandName.textContent = s.name === "ハヤト" ? "HAYATO" : s.name;
-    els.calStatus.textContent = !s.calendar.configured ? "サーバー側で未設定" : s.calendar.connected ? "接続済み" : "未接続";
-    const onPc = ["localhost", "127.0.0.1"].includes(location.hostname);
-    // Google のログインはPCのブラウザ（localhost）で行う。スマホからは案内だけ出す
-    els.calConnect.hidden = !s.calendar.configured || !onPc;
-    els.calHint.hidden = !s.calendar.configured || onPc || s.calendar.connected;
-    els.calConnect.textContent = s.calendar.connected ? "接続し直す" : "接続する";
-    return true;
-  } catch {
-    els.calStatus.textContent = "パソコンのハヤトにつながりません";
-    return false;
-  }
+// 初回: APIキーが無ければ設定を開く
+if (!settings.apiKey) {
+  setState("idle", "まず設定");
+  els.hayatoText.textContent = "はじめまして、ハヤトです。右上の設定でClaudeのAPIキーを入力してください。";
+  refreshMemoryCount();
+  els.settings.showModal();
 }
-
-// 初回: パスコードが必要なのに未入力なら設定を開く
-(async () => {
-  const ok = await refreshStatus();
-  if (!ok) {
-    try {
-      const r = await (await fetch("api/auth-required")).json();
-      if (r.required) { els.activity.textContent = "パスコードを入力"; els.settings.showModal(); }
-    } catch { /* noop */ }
-  }
-})();
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
