@@ -7,16 +7,25 @@ const INK = "#2b2a31"; // 輪郭線の色
 
 // ---- 表情ごとの部品 ----
 // eyes: open（通常）/ narrow（真剣）/ wide（見開き）/ teary（うるうる）/ happy（^ ^）/ closed
+// eyes は両目共通の文字列か、[左目, 右目]（画面上の左右）
+// pose: "bow" はお辞儀（頭を下げる）
 const EXPRESSIONS = {
-  neutral:   { brows: "normal",  eyes: "open",   mouth: "smile_small", look: [0, 0],   tilt: 0,  blush: 0.55, extra: null },
-  smile:     { brows: "up",      eyes: "happy",  mouth: "grin",        look: [0, 0],   tilt: -3, blush: 0.9,  extra: "sparkle" },
-  excited:   { brows: "up",      eyes: "wide",   mouth: "open_happy",  look: [0, -1],  tilt: 3,  blush: 0.9,  extra: "sparkle" },
-  fired:     { brows: "fierce",  eyes: "narrow", mouth: "smirk",       look: [0, 1],   tilt: -2, blush: 0.4,  extra: "signal" },
-  thinking:  { brows: "think",   eyes: "open",   mouth: "flat",        look: [6, -6],  tilt: 5,  blush: 0.4,  extra: "dots" },
-  surprised: { brows: "high",    eyes: "wide",   mouth: "o",           look: [0, 0],   tilt: 0,  blush: 0.4,  extra: "bang" },
-  worried:   { brows: "worried", eyes: "teary",  mouth: "wavy",        look: [-2, 3],  tilt: -4, blush: 0.4,  extra: "confused" },
-  sad:       { brows: "worried", eyes: "teary",  mouth: "frown",       look: [0, 4],   tilt: -5, blush: 0.3,  extra: "tear" },
-  listening: { brows: "up",      eyes: "open",   mouth: "smile_small", look: [0, 0],   tilt: 4,  blush: 0.6,  extra: "signal" },
+  neutral:   { brows: "normal",  eyes: "open",          mouth: "smile_small", look: [0, 0],  tilt: 0,  blush: 0.55, extra: null },
+  smile:     { brows: "up",      eyes: "happy",         mouth: "grin",        look: [0, 0],  tilt: -3, blush: 0.9,  extra: "sparkle" },
+  excited:   { brows: "up",      eyes: "wide",          mouth: "open_happy",  look: [0, -1], tilt: 3,  blush: 0.9,  extra: "sparkle" },
+  fired:     { brows: "fierce",  eyes: "narrow",        mouth: "smirk",       look: [0, 1],  tilt: -2, blush: 0.4,  extra: "signal" },
+  idea:      { brows: "up",      eyes: ["open", "happy"], mouth: "open_happy", look: [0, -1], tilt: 4, blush: 0.9,  extra: "idea" },
+  thinking:  { brows: "think",   eyes: "open",          mouth: "flat",        look: [6, -6], tilt: 5,  blush: 0.4,  extra: "dots" },
+  convinced: { brows: "relaxed", eyes: "closed",        mouth: "smile_small", look: [0, 0],  tilt: -6, blush: 0.5,  extra: "convinced" },
+  surprised: { brows: "high",    eyes: "wide",          mouth: "o",           look: [0, 0],  tilt: 0,  blush: 0.4,  extra: "bang" },
+  worried:   { brows: "worried", eyes: "teary",         mouth: "wavy",        look: [-2, 3], tilt: -4, blush: 0.4,  extra: "confused" },
+  please:    { brows: "worried", eyes: "teary",         mouth: "small_open",  look: [0, -3], tilt: 0,  blush: 0.7,  extra: "please" },
+  sad:       { brows: "worried", eyes: "teary",         mouth: "frown",       look: [0, 4],  tilt: -5, blush: 0.3,  extra: "tear" },
+  error:     { brows: "worried", eyes: ["x", "swirl"],  mouth: "wavy",        look: [0, 0],  tilt: -7, blush: 0.3,  extra: "error" },
+  panic:     { brows: "worried", eyes: ["x", "swirl"],  mouth: "distress",    look: [0, 0],  tilt: 4,  blush: 0,    extra: "panic" },
+  relieved:  { brows: "relaxed", eyes: "closed",        mouth: "relaxed",     look: [0, 0],  tilt: -3, blush: 0.6,  extra: "relieved" },
+  bow:       { brows: "relaxed", eyes: "closed",        mouth: "smile_small", look: [0, 0],  tilt: 0,  blush: 0.6,  extra: "bow", pose: "bow" },
+  listening: { brows: "up",      eyes: "open",          mouth: "smile_small", look: [0, 0],  tilt: 4,  blush: 0.6,  extra: "signal" },
 };
 export const EXPRESSION_NAMES = Object.keys(EXPRESSIONS);
 
@@ -28,6 +37,7 @@ const BROWS = {
   fierce:  "M139 194 Q159 197 179 207",
   worried: "M141 205 Q160 199 177 189",
   think:   "M140 197 Q157 190 176 199",
+  relaxed: "M141 201 Q158 195 176 200",
 };
 
 // 口（中心 x=200）
@@ -40,6 +50,9 @@ const MOUTHS = {
   o:           { d: "M200 292 Q209 292 209 302 Q209 312 200 312 Q191 312 191 302 Q191 292 200 292 Z", fill: true },
   wavy:        { d: "M186 304 Q193 297 200 303 Q207 309 214 302", fill: false },
   frown:       { d: "M188 306 Q200 296 212 306", fill: false },
+  distress:    { d: "M180 298 Q200 288 220 298 Q223 320 200 322 Q177 320 180 298 Z", fill: true, teeth: true },
+  small_open:  { d: "M191 298 Q200 295 209 298 Q209 309 200 310 Q191 309 191 298 Z", fill: true },
+  relaxed:     { d: "M181 295 Q200 310 219 295", fill: false },
   // 口パク用
   talk_a:      { d: "M182 292 Q200 292 218 292 Q215 316 200 317 Q185 316 182 292 Z", fill: true, tongue: true },
   talk_i:      { d: "M180 293 Q200 296 220 293 Q214 306 200 307 Q186 306 180 293 Z", fill: true, teeth: true },
@@ -73,6 +86,9 @@ function drawEye(parent, id) {
   // 閉じた目・笑い目
   el("path", { class: "eye-closed", d: "M139 240 Q160 251 182 240" }, g);
   el("path", { class: "eye-happy", d: "M139 245 Q160 220 182 245" }, g);
+  // ガーン・パニック用の × と ぐるぐる
+  el("path", { class: "eye-x", d: "M145 224 L176 253 M176 224 L145 253" }, g);
+  el("path", { class: "eye-swirl", d: "M160 238 m-2 0 a2 2 0 1 1 4 0 a5 5 0 0 1 -10 0 a8 8 0 0 1 16 0 a11 11 0 0 1 -22 0 a14 14 0 0 1 28 0 a17 17 0 0 1 -34 0" }, g);
   return g;
 }
 
@@ -132,12 +148,19 @@ export function createCharacter(container) {
   el("path", { class: "ol", d: "M84 256 Q58 176 92 112 Q132 50 206 46 Q284 48 318 110 Q346 176 318 256 Q302 206 292 176 L110 176 Q98 206 84 256 Z", fill: "url(#hairGrad)" }, head);
 
   // 顔
-  el("path", { class: "ol face", d: "M110 196 Q106 266 140 306 Q170 336 200 338 Q230 336 260 306 Q294 266 290 196 Q282 122 200 118 Q118 122 110 196 Z", fill: "#fde4d3" }, head);
+  const FACE_D = "M110 196 Q106 266 140 306 Q170 336 200 338 Q230 336 260 306 Q294 266 290 196 Q282 122 200 118 Q118 122 110 196 Z";
+  el("path", { class: "ol face", d: FACE_D, fill: "#fde4d3" }, head);
+  el("path", { d: FACE_D }, el("clipPath", { id: "faceClip" }, defs));
 
   // 頬の赤み
   const blush = el("g", { class: "blush" }, head);
   el("ellipse", { cx: 137, cy: 276, rx: 16, ry: 9, fill: "#ffb3b3" }, blush);
   el("ellipse", { cx: 263, cy: 276, rx: 16, ry: 9, fill: "#ffb3b3" }, blush);
+
+  // パニック時の顔の青ざめ
+  defs.insertAdjacentHTML("beforeend", `<linearGradient id="paleGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a7cff" stop-opacity=".75"/><stop offset=".55" stop-color="#7d9cff" stop-opacity=".4"/><stop offset="1" stop-color="#7d9cff" stop-opacity="0"/></linearGradient>`);
+  el("rect", { class: "fx-pale", x: 100, y: 110, width: 200, height: 170, fill: "url(#paleGrad)", "clip-path": "url(#faceClip)" }, head);
 
   // 目
   const eyes = el("g", { class: "eyes" }, head);
@@ -193,8 +216,57 @@ export function createCharacter(container) {
   el("path", { d: "M300 262 Q300 306 254 318", fill: "none", stroke: "#a9c3d6", "stroke-width": 4.5, "stroke-linecap": "round" }, headset);
   el("rect", { class: "ol", x: 238, y: 310, width: 20, height: 14, rx: 7, fill: "#cfe6f5" }, headset);
 
+  // お願いポーズの合わせた手（体と一緒に揺れるよう body の中に描く）
+  const hands = el("g", { class: "fx-hands" }, body);
+  el("path", { class: "ol", d: "M200 456 Q180 452 174 432 Q168 410 176 392 Q184 376 196 374 Q201 376 200 386 Z", fill: "#fbd9c4" }, hands);
+  el("path", { class: "ol", d: "M200 456 Q220 452 226 432 Q232 410 224 392 Q216 376 204 374 Q199 376 200 386 Z", fill: "#fbd9c4" }, hands);
+  el("path", { d: "M200 386 L200 454 M177 404 Q184 402 189 406 M175 420 Q182 418 188 422 M223 404 Q216 402 211 406 M225 420 Q218 418 212 422", fill: "none", stroke: "#2b2a31", "stroke-width": 2.4, "stroke-linecap": "round" }, hands);
+  el("path", { class: "ol", d: "M172 452 L228 452 L232 466 L168 466 Z", fill: "#fbfbfd" }, hands);
+  el("path", { class: "ol", d: "M150 500 Q154 470 168 462 L232 462 Q246 470 250 500 Z", fill: "#64666d" }, hands);
+
   // ================= 感情のエフェクト =================
   const fx = el("g", { class: "fx" }, svg);
+  // ひらめき: 電球と星
+  const idea = el("g", { class: "fx-idea" }, fx);
+  el("path", { class: "ol", d: "M66 70 Q46 70 46 92 Q46 104 56 112 L58 122 L74 122 L76 112 Q86 104 86 92 Q86 70 66 70 Z", fill: "#ffe680" }, idea);
+  el("path", { class: "ol", d: "M58 124 L74 124 L72 134 L60 134 Z", fill: "#c9d3df" }, idea);
+  el("path", { d: "M60 96 Q66 106 72 96", fill: "none", stroke: "#e0a020", "stroke-width": 2.5 }, idea);
+  el("path", { class: "rays", d: "M66 48 L66 58 M36 62 L43 69 M96 62 L89 69 M28 92 L38 92 M94 92 L104 92" }, idea);
+  el("path", { class: "ol", d: "M346 178 l5 10 l11 2 l-8 8 l2 11 l-10 -5 l-10 5 l2 -11 l-8 -8 l11 -2 Z", fill: "#ffd84d" }, idea);
+  // ガーン: ERROR の文字・ノイズ・!?
+  const error = el("g", { class: "fx-error" }, fx);
+  const errText = el("text", { x: 30, y: 78, class: "fx-errtext", transform: "rotate(-8 30 78)" }, error);
+  errText.textContent = "ERROR";
+  // パニック: 大きな ! とノイズ
+  const panic = el("g", { class: "fx-panic" }, fx);
+  el("path", { d: "M352 40 L344 104", class: "fx-ex", "stroke-width": 12 }, panic);
+  el("circle", { cx: 342, cy: 124, r: 7, class: "fx-ex-dot" }, panic);
+  el("path", { class: "fx-sweatdrop ol", d: "M292 124 Q304 142 298 152 Q290 158 284 150 Q282 140 292 124 Z", fill: "#a9e1ff" }, panic);
+  // ノイズ（ガーン・パニック共通）
+  const glitch = el("g", { class: "fx-glitch" }, fx);
+  for (const [x, y, w] of [[20, 170, 60], [30, 186, 34], [14, 204, 48], [318, 160, 58], [330, 178, 40], [322, 214, 56], [40, 250, 30], [336, 250, 34]]) {
+    el("rect", { x, y, width: w, height: 7, rx: 2 }, glitch);
+  }
+  // 納得: なるほど ＋ データ解析バー
+  const convinced = el("g", { class: "fx-convinced" }, fx);
+  const naruhodo = el("text", { x: 342, y: 120, class: "fx-word", "writing-mode": "tb" }, convinced);
+  naruhodo.textContent = "なるほど";
+  const barLabel = el("text", { x: 228, y: 30, class: "fx-small" }, convinced);
+  barLabel.textContent = "データ解析";
+  el("rect", { x: 300, y: 18, width: 84, height: 12, rx: 4, fill: "none", stroke: "#7fe0ff", "stroke-width": 2 }, convinced);
+  el("rect", { class: "fx-bar", x: 303, y: 21, width: 78, height: 6, rx: 2 }, convinced);
+  // お疲れ様: ふう ＋ コーヒー
+  const relieved = el("g", { class: "fx-relieved" }, fx);
+  const fuu = el("text", { x: 28, y: 250, class: "fx-word" }, relieved);
+  fuu.textContent = "ふう";
+  el("path", { class: "fx-sweatdrop ol", d: "M292 150 Q304 168 298 178 Q290 184 284 176 Q282 166 292 150 Z", fill: "#a9e1ff" }, relieved);
+  el("path", { class: "ol", d: "M318 420 L362 420 L358 466 Q356 474 346 474 L334 474 Q324 474 322 466 Z", fill: "#f4f7fb" }, relieved);
+  el("path", { class: "ol", d: "M360 430 Q376 430 374 446 Q372 458 358 456", fill: "none" }, relieved);
+  el("path", { class: "steam", d: "M330 410 Q324 398 332 388 Q338 378 332 368 M346 410 Q340 396 348 386 Q354 376 348 364" }, relieved);
+  // お辞儀: 動きの線
+  const bowFx = el("g", { class: "fx-bow" }, fx);
+  el("path", { d: "M58 230 Q46 250 58 270 M40 222 Q24 250 40 278" }, bowFx);
+
   const sparkle = el("g", { class: "fx-sparkle" }, fx);
   for (const [x, y, s] of [[340, 150, 1], [60, 180, 0.75], [352, 226, 0.55], [48, 120, 0.5]]) {
     el("path", { d: `M${x} ${y - 14 * s} L${x + 4 * s} ${y - 4 * s} L${x + 14 * s} ${y} L${x + 4 * s} ${y + 4 * s} L${x} ${y + 14 * s} L${x - 4 * s} ${y + 4 * s} L${x - 14 * s} ${y} L${x - 4 * s} ${y - 4 * s} Z` }, sparkle);
@@ -232,11 +304,13 @@ export function createCharacter(container) {
     teeth.style.display = m.teeth ? "" : "none";
   }
 
-  function eyeMode() {
-    const mode = EXPRESSIONS[current].eyes;
-    return blinking && mode !== "happy" ? "closed" : mode;
+  function applyEyes() {
+    const spec = EXPRESSIONS[current].eyes;
+    const [l, r] = Array.isArray(spec) ? spec : [spec, spec];
+    const blinkable = (m) => !["happy", "x", "swirl"].includes(m);
+    eyeL.dataset.mode = blinking && blinkable(l) ? "closed" : l;
+    eyeR.dataset.mode = blinking && blinkable(r) ? "closed" : r;
   }
-  function applyEyes() { svg.dataset.eyes = eyeMode(); }
 
   function render() {
     const ex = EXPRESSIONS[current];
@@ -252,6 +326,7 @@ export function createCharacter(container) {
       eye.querySelector(".iris").setAttribute("transform", `translate(${lx * flip} ${ly})`);
     }
     head.style.setProperty("--tilt", `${ex.tilt}deg`);
+    svg.dataset.pose = ex.pose ?? "";
   }
 
   function setExpression(name) {

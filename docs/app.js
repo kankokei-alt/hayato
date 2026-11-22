@@ -59,7 +59,7 @@ function setState(next, activity) {
   clearTimeout(relaxTimer);
   if (next === "listening") hayato.setExpression("listening");
   else if (next === "thinking" && prev !== "speaking") hayato.setExpression("thinking");
-  else if (next === "error") hayato.setExpression("worried");
+  else if (next === "error") hayato.setExpression("error");
   else if (next === "idle") relaxTimer = setTimeout(() => { if (state === "idle") hayato.setExpression("neutral"); }, 6000);
   if (activity === undefined) return;
   // 長い案内はリングの中に収まらないので、下の字幕エリアに出す
@@ -488,7 +488,7 @@ els.pitch.addEventListener("input", () => { els.pitchOut.textContent = els.pitch
 els.testVoice.addEventListener("click", () => {
   unlockAudio();
   stopSpeaking();
-  enqueueSpeech("準備オッケーだ。いつでも呼んでくれ！", "smile");
+  enqueueSpeech("準備はばっちりです。いつでもお任せください！", "fired");
 });
 
 // メモとタスクのバックアップ（機種変更や、万一消えたときのため）
@@ -528,20 +528,21 @@ els.importFile.addEventListener("change", async () => {
 // 起動時のあいさつ（表示だけ。iPhoneは画面を触るまで声を出せない）
 function greeting() {
   const h = new Date().getHours();
-  const name = settings.callName || "相棒";
-  if (h < 5) return `${name}、夜更かしか？ 付き合うぜ。`;
-  if (h < 11) return `おはよう、${name}！ 今日も一緒にいこうぜ。`;
-  if (h < 18) return `よう、${name}！ 何から片付ける？`;
-  return `おつかれ、${name}！ 今日はどうだった？`;
+  const name = settings.callName ? `${settings.callName}、` : "";
+  if (h < 5) return `${name}夜遅くまでお疲れ様です。お付き合いしますよ。`;
+  if (h < 11) return `${name}おはようございます！ 今日もよろしくお願いします。`;
+  if (h < 18) return `${name}こんにちは！ 何からお手伝いしましょう？`;
+  return `${name}お疲れ様です！ 今日はどんな一日でしたか？`;
 }
 els.hayatoText.textContent = greeting();
-hayato.setExpression("smile");
+hayato.setExpression("bow");
+setTimeout(() => { if (state === "idle") hayato.setExpression("smile"); }, 1600);
 setTimeout(() => { if (state === "idle") hayato.setExpression("neutral"); }, 5000);
 
 // 初回: APIキーが無ければ設定を開く
 if (!settings.apiKey) {
   setState("idle", "まず設定");
-  els.hayatoText.textContent = "はじめまして、ハヤトだ！ 右上の設定でClaudeのAPIキーを入れてくれ。それで俺は動けるようになる。";
+  els.hayatoText.textContent = "はじめまして、ハヤトです！ 右上の設定でClaudeのAPIキーを入れてください。それで僕が動けるようになります。";
   refreshMemoryCount();
   els.settings.showModal();
 }
