@@ -11,20 +11,21 @@ const INK = "#2b2a2e";
 // 各画像の情報（画像のピクセル座標）
 //  w,h: 大きさ / cx,cy: 顔の中心 / s: 頭の大きさをそろえる倍率 / neck: 首（頭を回す軸）の y
 //  eyes: 開いている目の範囲 [x1,y1,x2,y2] / mouth: 口の中心と大きさ、open=口が開いた絵か
+//  lip: 口が閉じた絵の、口の線（左端・真ん中・右端）。この線を上唇にして下へ口を開く
 const SPRITES = {
-  neutral:   { w: 230, h: 290, cx: 125, cy: 135, s: 0.83, neck: 203, eyes: [[82, 132, 110, 160], [148, 132, 177, 160]], mouth: { x: 131, y: 179, w: 42, h: 8, open: false } },
+  neutral:   { w: 230, h: 290, cx: 125, cy: 135, s: 0.83, neck: 203, eyes: [[82, 132, 110, 160], [148, 132, 177, 160]], mouth: { x: 131, y: 179, w: 42, h: 8, open: false }, lip: [[112, 179.5], [131, 184.5], [150, 178.5]] },
   smile:     { w: 190, h: 250, cx: 90,  cy: 135, s: 1,    neck: 198, eyes: [], mouth: { x: 95, y: 169, w: 56, h: 22, open: true } },
   excited:   { w: 252, h: 290, cx: 145, cy: 135, s: 0.86, neck: 212, eyes: [[90, 134, 119, 168], [159, 131, 195, 168]], mouth: { x: 148, y: 181, w: 33, h: 22, open: true } },
-  fired:     { w: 217, h: 249, cx: 125, cy: 130, s: 1.03, neck: 188, eyes: [[78, 120, 102, 142], [138, 120, 163, 140]], mouth: { x: 134, y: 162, w: 36, h: 7, open: false } },
+  fired:     { w: 217, h: 249, cx: 125, cy: 130, s: 1.03, neck: 188, eyes: [[78, 120, 102, 142], [138, 120, 163, 140]], mouth: { x: 134, y: 162, w: 36, h: 7, open: false }, lip: [[118, 162], [134, 160.5], [150, 154]] },
   idea:      { w: 262, h: 290, cx: 155, cy: 135, s: 0.88, neck: 212, eyes: [[98, 133, 135, 167]], mouth: { x: 157, y: 184, w: 42, h: 22, open: true } },
-  convinced: { w: 180, h: 250, cx: 90,  cy: 134, s: 1.05, neck: 186, eyes: [], mouth: { x: 87, y: 160, w: 34, h: 6, open: false } },
+  convinced: { w: 180, h: 250, cx: 90,  cy: 134, s: 1.05, neck: 186, eyes: [], mouth: { x: 87, y: 160, w: 34, h: 6, open: false }, lip: [[71, 161.5], [88, 160], [101, 154]] },
   surprised: { w: 222, h: 215, cx: 105, cy: 110, s: 1,    neck: 176, eyes: [[55, 105, 85, 137], [118, 105, 148, 137]], mouth: { x: 104, y: 152, w: 15, h: 15, open: true } },
-  worried:   { w: 200, h: 215, cx: 100, cy: 115, s: 1,    neck: 176, eyes: [[52, 118, 77, 138], [108, 115, 137, 138]], mouth: { x: 93, y: 156, w: 17, h: 7, open: false } },
+  worried:   { w: 200, h: 215, cx: 100, cy: 115, s: 1,    neck: 176, eyes: [[52, 118, 77, 138], [108, 115, 137, 138]], mouth: { x: 93, y: 156, w: 17, h: 7, open: false }, lip: [[86, 158.5], [93, 156.5], [101, 158.5]] },
   please:    { w: 166, h: 208, cx: 85,  cy: 110, s: 1,    neck: 170, eyes: [[35, 103, 67, 133], [98, 103, 130, 133]], mouth: { x: 84, y: 151, w: 28, h: 12, open: true } },
   error:     { w: 238, h: 258, cx: 125, cy: 135, s: 1,    neck: 214, eyes: [], mouth: { x: 123, y: 192, w: 27, h: 10, open: true } },
   panic:     { w: 237, h: 280, cx: 115, cy: 115, s: 1,    neck: 182, eyes: [], mouth: { x: 117, y: 153, w: 35, h: 14, open: true } },
   relieved:  { w: 228, h: 212, cx: 110, cy: 110, s: 1,    neck: 172, eyes: [], mouth: { x: 116, y: 147, w: 33, h: 11, open: true } },
-  bow:       { w: 178, h: 290, cx: 95,  cy: 105, s: 1,    neck: 176, eyes: [], mouth: { x: 105, y: 151, w: 30, h: 7, open: false } },
+  bow:       { w: 178, h: 290, cx: 95,  cy: 105, s: 1,    neck: 176, eyes: [], mouth: { x: 105, y: 151, w: 30, h: 7, open: false }, lip: [[92, 157], [104, 155.5], [112, 149]] },
 };
 
 // Claude やアプリが使う表情名 → 使う画像と、頭の傾き（度）
@@ -136,33 +137,57 @@ function drawLid(g, eye, amount, skin) {
   g.stroke();
 }
 
-function drawTalkMouth(g, m, level, skin) {
+/** 元の口の線を上唇にして、その下に口を開く（肌で隠さないので継ぎ目が出ない） */
+function drawTalkMouth(g, lip, level) {
   // level: 1=小さく開く 2=中くらい 3=大きく
-  const w = m.w;
-  softEllipse(g, m.x, m.y, w / 2 + 3, Math.max(m.h, 6) / 2 + 3.5, skin);
-  const mw = Math.max(9, w * [0, 0.42, 0.55, 0.62][level]);
-  const mh = Math.min([0, 5, 9, 13][level], mw * [0, 0.45, 0.62, 0.75][level]);
-  const top = m.y - mh * 0.35;
+  const [[x1, y1], [mx, my], [x2, y2]] = lip;
+  const width = Math.hypot(x2 - x1, y2 - y1);
+  const open = Math.min([0, 4, 7, 10][level], width * [0, 0.2, 0.32, 0.42][level]);
+  // 2次曲線の制御点（真ん中の点を通るように）
+  const cxU = 2 * mx - (x1 + x2) / 2, cyU = 2 * my - (y1 + y2) / 2;
+  // 下唇は線の両端から少し内側から始め、真ん中を open だけ下げる
+  // 上唇の線の上で、両端から 15% 内側の点（下唇はここから始まる）
+  const onUpper = (t) => [
+    (1 - t) ** 2 * x1 + 2 * (1 - t) * t * cxU + t * t * x2,
+    (1 - t) ** 2 * y1 + 2 * (1 - t) * t * cyU + t * t * y2,
+  ];
+  const [ax, ay] = onUpper(0.15);
+  const [bx, by] = onUpper(0.85);
+  // 下唇は丸い U 字（3次曲線）
+  const drop = my + open * 1.33;
+  const lower = (ctx) => ctx.bezierCurveTo(bx - (bx - ax) * 0.05, drop, ax + (bx - ax) * 0.05, drop, ax, ay);
+
+  g.save();
   g.beginPath();
-  g.moveTo(m.x - mw / 2, top);
-  g.quadraticCurveTo(m.x, top - 1.5, m.x + mw / 2, top);
-  g.quadraticCurveTo(m.x + mw / 2, top + mh, m.x, top + mh);
-  g.quadraticCurveTo(m.x - mw / 2, top + mh, m.x - mw / 2, top);
+  g.moveTo(x1, y1);
+  g.quadraticCurveTo(cxU, cyU, x2, y2);
+  g.lineTo(bx, by);
+  lower(g);
   g.closePath();
-  g.fillStyle = "#c8504d";
+  g.fillStyle = "#c9504b";
   g.fill();
   if (level >= 2) {
-    g.save();
     g.clip();
-    g.fillStyle = "#f19a92";
+    g.fillStyle = "#f2a198";
     g.beginPath();
-    g.ellipse(m.x, top + mh, mw * 0.32, mh * 0.42, 0, 0, Math.PI * 2);
+    g.ellipse(mx, my + open * 0.95, width * 0.2, open * 0.45, 0, 0, Math.PI * 2);
     g.fill();
-    g.restore();
   }
-  g.strokeStyle = INK;
-  g.lineWidth = 2.4;
+  g.restore();
+  g.lineCap = "round";
   g.lineJoin = "round";
+  g.strokeStyle = INK;
+  // 下唇の線
+  g.lineWidth = 2.4;
+  g.beginPath();
+  g.moveTo(bx, by);
+  lower(g);
+  g.stroke();
+  // 元の口の線をなぞり直す（塗りが少しかぶった分を戻す）
+  g.lineWidth = 2.8;
+  g.beginPath();
+  g.moveTo(x1, y1);
+  g.quadraticCurveTo(cxU, cyU, x2, y2);
   g.stroke();
 }
 
@@ -349,7 +374,7 @@ export function createCharacter(container) {
     cg.clearRect(0, 0, s.w, s.h);
     cg.drawImage(images[name], 0, 0);
     s.eyes.forEach((eye, i) => drawLid(cg, eye, lid, skins[name].eyes[i]));
-    if (!s.mouth.open && talkLevel > 0) drawTalkMouth(cg, s.mouth, talkLevel, skins[name].mouth);
+    if (s.lip && talkLevel > 0) drawTalkMouth(cg, s.lip, talkLevel);
     if (glx) {
       const { gl } = glx;
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, comp);
