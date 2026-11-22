@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05080d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ハヤト">
+  <title>ハヤト</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name" id="brandName">HAYATO</span>
+      <span class="brand-sub">PERSONAL AGENT</span>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" id="logToggle" aria-label="会話ログ" title="会話ログ">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      </button>
+      <button class="icon-btn" id="settingsBtn" aria-label="設定" title="設定">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="core-wrap" aria-live="polite">
+      <canvas id="core" aria-hidden="true"></canvas>
+      <div class="core-label">
+        <div class="state" id="stateLabel">STANDBY</div>
+        <div class="activity" id="activity">マイクをタップ</div>
+      </div>
+    </section>
+
+    <section class="caption" id="caption" aria-live="polite">
+      <p class="you" id="youText"></p>
+      <p class="hayato" id="hayatoText"></p>
+    </section>
+  </main>
+
+  <aside class="log" id="log" hidden>
+    <div class="log-head">
+      <span>会話ログ</span>
+      <button class="text-btn" id="resetBtn">新しい会話</button>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </aside>
+
+  <footer class="controls">
+    <form class="text-input" id="textForm" autocomplete="off">
+      <input id="textInput" type="text" placeholder="文字で話しかける" enterkeyhint="send" aria-label="メッセージ">
+    </form>
+    <button class="mic" id="micBtn" aria-label="話しかける">
+      <span class="mic-ring" aria-hidden="true"></span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <label class="toggle" title="返答のあと自動で聞き取りを再開">
+      <input type="checkbox" id="autoListen">
+      <span>連続会話</span>
+    </label>
+  </footer>
+
+  <dialog id="settings">
+    <form method="dialog" class="settings-form">
+      <h2>設定</h2>
+      <label class="field">
+        <span>パスコード</span>
+        <input type="password" id="passcode" autocomplete="current-password" placeholder="サーバーで設定した HAYATO_PASSCODE">
+      </label>
+      <label class="field">
+        <span>声</span>
+        <select id="voiceSelect"></select>
+      </label>
+      <label class="field">
+        <span>話す速さ <output id="rateOut">1.1</output></span>
+        <input type="range" id="rate" min="0.7" max="1.6" step="0.05" value="1.1">
+      </label>
+      <label class="field">
+        <span>声の高さ <output id="pitchOut">0.9</output></span>
+        <input type="range" id="pitch" min="0.5" max="1.5" step="0.05" value="0.9">
+      </label>
+      <div class="field">
+        <span>Googleカレンダー</span>
+        <div class="row">
+          <span id="calStatus" class="muted">確認中…</span>
+          <button type="button" class="text-btn" id="calConnect">接続する</button>
+        </div>
+      </div>
+      <div class="row end">
+        <button type="button" class="text-btn" id="testVoice">声をテスト</button>
+        <button value="close" class="primary-btn">閉じる</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
