@@ -71,25 +71,34 @@ body {
 }
 .core-wrap {
   position: relative;
-  width: min(78vw, 46vh, 420px);
-  aspect-ratio: 1;
-  display: grid; place-items: center;
+  width: min(92vw, 50vh, 440px);
+  aspect-ratio: 4 / 5;
+  flex-shrink: 1; min-height: 0;
 }
-#core { position: absolute; inset: 0; width: 100%; height: 100%; }
-.core-label { position: relative; text-align: center; pointer-events: none; }
+/* 背景のホログラムリング（頭の後ろ） */
+#core { position: absolute; left: -6%; top: -4%; width: 112%; aspect-ratio: 1; }
+.character { position: absolute; inset: 0; }
+.hud {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-top: -6px; padding: 5px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: rgba(8, 14, 22, .75);
+  font-size: 12px; position: relative; z-index: 1; max-width: 92vw;
+}
 .state {
-  font-family: var(--mono); letter-spacing: .35em; font-size: 13px;
-  color: var(--accent); text-shadow: 0 0 12px currentColor;
+  font-family: var(--mono); letter-spacing: .25em; font-size: 11px;
+  color: var(--accent); text-shadow: 0 0 10px currentColor;
   transition: color .3s;
 }
-.activity { margin: 8px auto 0; font-size: 12px; line-height: 1.5; color: var(--muted); min-height: 1.2em; max-width: min(36vw, 22vh, 190px); }
+.state::before { content: "● "; }
+.activity { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.activity:empty { display: none; }
 body[data-state="thinking"] .state { color: var(--accent-2); }
 body[data-state="speaking"] .state { color: var(--accent-3); }
 body[data-state="error"] .state { color: var(--danger); }
 
 .caption {
   width: 100%; max-width: 640px;
-  margin-top: 8px; min-height: 7.5em; max-height: 28vh; overflow-y: auto;
+  margin-top: 6px; min-height: 5.5em; max-height: 22vh; overflow-y: auto;
   text-align: center;
 }
 .caption p { margin: 6px 0; line-height: 1.7; }
@@ -193,3 +202,60 @@ dialog { max-height: 88vh; overflow-y: auto; }
 @media (prefers-reduced-motion: reduce) {
   .mic-ring { animation: none !important; }
 }
+
+/* ---------- ハヤトの立ち絵 ---------- */
+.hayato { width: 100%; height: 100%; overflow: visible; display: block; }
+.hayato * { transform-box: view-box; }
+.hayato .body { animation: breathe 4.2s ease-in-out infinite; transform-origin: 200px 500px; }
+.hayato .head { transform: rotate(var(--tilt, 0deg)); transform-origin: 200px 340px; transition: transform .45s cubic-bezier(.3, 1.4, .5, 1); }
+.hayato.pop .head { animation: pop .38s ease-out; }
+@keyframes breathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-3px) scale(1.004); } }
+@keyframes pop { 0% { translate: 0 0; } 40% { translate: 0 -7px; } 100% { translate: 0 0; } }
+
+.hayato .sclera { fill: #fbfdff; }
+.hayato .lid { fill: #1a1424; }
+.hayato .lash, .hayato .lower { fill: none; stroke: #1a1424; stroke-linecap: round; }
+.hayato .lash { stroke-width: 3; }
+.hayato .lower { stroke-width: 1.6; opacity: .7; }
+.hayato .eye-closed, .hayato .eye-happy { fill: none; stroke: #1a1424; stroke-width: 4.5; stroke-linecap: round; display: none; }
+.hayato .iris { transition: transform .35s ease; }
+.hayato .eye-open { transform-origin: 162px 220px; transition: transform .15s; }
+.hayato[data-eyes="closed"] .eye-open, .hayato[data-eyes="happy"] .eye-open { display: none; }
+.hayato[data-eyes="closed"] .eye-closed { display: inline; }
+.hayato[data-eyes="happy"] .eye-happy { display: inline; }
+.hayato[data-eyes="wide"] .eye-open { transform: scale(1.06, 1.12); }
+.hayato[data-eyes="narrow"] .eye-open { transform: scale(1.02, .78); }
+
+.hayato .brow { fill: none; stroke: #1b2238; stroke-width: 6.5; stroke-linecap: round; transition: d .25s; }
+.hayato .nose { fill: none; stroke: #d39a80; stroke-width: 2.2; stroke-linecap: round; }
+.hayato .mouth-line { fill: none; stroke: #6d2d33; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.hayato .mouth-inner { fill: #5b1d29; }
+.hayato .tongue { fill: #ff7d8b; }
+.hayato .teeth { fill: #fff; }
+.hayato .blush { transition: opacity .4s; }
+
+.hayato .glow-lines path { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; opacity: .9; }
+.hayato .badge, .hayato .headset-light { fill: var(--accent); }
+.hayato .headset-light { animation: led 2.4s ease-in-out infinite; }
+@keyframes led { 50% { opacity: .45; } }
+body[data-state="thinking"] .hayato .glow-lines path, body[data-state="thinking"] .hayato .headset-light { stroke: var(--accent-2); fill: var(--accent-2); }
+body[data-state="thinking"] .hayato .glow-lines path { fill: none; }
+body[data-state="speaking"] .hayato .headset-light { fill: var(--accent-3); animation-duration: .6s; }
+
+.hayato .fx > * { display: none; }
+.hayato[data-fx="sweat"] .fx-sweat { display: inline; fill: #a8e6ff; stroke: #5bb8de; stroke-width: 1.5; animation: drip 1.6s ease-in infinite; }
+.hayato[data-fx="sparkle"] .fx-sparkle { display: inline; fill: #ffe38a; animation: twinkle 1s ease-in-out infinite alternate; transform-origin: 200px 160px; }
+.hayato[data-fx="fire"] .fx-fire { display: inline; fill: none; stroke: #ff9a2e; stroke-width: 5; stroke-linecap: round; animation: flare .5s ease-in-out infinite alternate; }
+.hayato[data-fx="dots"] .fx-dots { display: inline; fill: #a9bdd3; }
+.hayato[data-fx="dots"] .fx-dots circle { animation: dot 1.2s ease-in-out infinite; }
+.hayato[data-fx="dots"] .fx-dots circle:nth-child(2) { animation-delay: .2s; }
+.hayato[data-fx="dots"] .fx-dots circle:nth-child(3) { animation-delay: .4s; }
+.hayato[data-fx="shock"] .fx-shock { display: inline; fill: none; stroke: #ffffff; stroke-width: 4; stroke-linecap: round; }
+@keyframes drip { 0% { transform: translateY(-4px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(10px); opacity: 0; } }
+@keyframes twinkle { from { opacity: .4; transform: scale(.9); } to { opacity: 1; transform: scale(1.05); } }
+@keyframes flare { from { opacity: .55; } to { opacity: 1; } }
+@keyframes dot { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .hayato .body, .hayato .headset-light, .hayato .fx * { animation: none !important; }
+}
+.character { -webkit-mask-image: linear-gradient(#000 78%, transparent 99%); mask-image: linear-gradient(#000 78%, transparent 99%); }

@@ -34,13 +34,14 @@
   </header>
 
   <main class="stage">
-    <section class="core-wrap" aria-live="polite">
+    <section class="core-wrap">
       <canvas id="core" aria-hidden="true"></canvas>
-      <div class="core-label">
-        <div class="state" id="stateLabel">STANDBY</div>
-        <div class="activity" id="activity">マイクをタップ</div>
-      </div>
+      <div class="character" id="character"></div>
     </section>
+    <div class="hud" aria-live="polite">
+      <span class="state" id="stateLabel">STANDBY</span>
+      <span class="activity" id="activity"></span>
+    </div>
 
     <section class="caption" id="caption" aria-live="polite">
       <p class="you" id="youText"></p>

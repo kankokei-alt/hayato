@@ -1,5 +1,6 @@
 // ハヤト: 音声認識 → Claude（iPhoneから直接呼ぶ）→ 音声合成 の流れと、中央コアのアニメーション。
 import * as agent from "./agent.js";
+import { createCharacter, EXPRESSION_NAMES } from "./character.js";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -32,8 +33,8 @@ const settings = {
   callName: store.get("callName", ""),
   effort: store.get("effort", "low"),
   voiceURI: store.get("voiceURI", ""),
-  rate: store.get("rate", 1.1),
-  pitch: store.get("pitch", 0.9),
+  rate: store.get("rate", 1.15),
+  pitch: store.get("pitch", 1.0),
   autoListen: store.get("autoListen", false),
 };
 function applyAgentSettings() {
@@ -45,11 +46,21 @@ applyAgentSettings();
 const STATE_TEXT = {
   idle: "STANDBY", listening: "LISTENING", thinking: "ANALYZING", speaking: "SPEAKING", error: "ERROR",
 };
+const hayato = createCharacter($("character"));
+let relaxTimer = null;
+
 let state = "idle";
 function setState(next, activity) {
+  const prev = state;
   state = next;
   document.body.dataset.state = next;
   els.stateLabel.textContent = STATE_TEXT[next];
+  // 状態に合わせた表情。話している間の表情は返答の中の [face:...] で決まる
+  clearTimeout(relaxTimer);
+  if (next === "listening") hayato.setExpression("listening");
+  else if (next === "thinking" && prev !== "speaking") hayato.setExpression("thinking");
+  else if (next === "error") hayato.setExpression("worried");
+  else if (next === "idle") relaxTimer = setTimeout(() => { if (state === "idle") hayato.setExpression("neutral"); }, 6000);
   if (activity === undefined) return;
   // 長い案内はリングの中に収まらないので、下の字幕エリアに出す
   if (activity.length > 20) {
@@ -113,29 +124,35 @@ function cleanForSpeech(text) {
     .trim();
 }
 
-function enqueueSpeech(text) {
+function enqueueSpeech(text, expression = null) {
   const t = cleanForSpeech(text);
-  if (!t || !synth) return;
-  speakQueue.push(t);
+  if (!synth) { if (expression) hayato.setExpression(expression); return; }
+  if (!t) { if (expression) hayato.setExpression(expression); return; }
+  speakQueue.push({ text: t, expression });
   if (!speaking) speakNext();
 }
 
 function speakNext() {
-  const text = speakQueue.shift();
-  if (!text) {
+  const item = speakQueue.shift();
+  if (!item) {
     speaking = false;
+    hayato.setTalking(false);
     if (!streamDone) setState("thinking"); // ツール実行中などで返答の続きを待っている
     maybeFinishSpeaking();
     return;
   }
   speaking = true;
   setState("speaking");
-  const u = new SpeechSynthesisUtterance(text);
+  // その文に付いていた表情に切り替える（考え中・聞き取り中の顔のままなら普通の顔に）
+  if (item.expression) hayato.setExpression(item.expression);
+  else if (["thinking", "listening"].includes(hayato.expression)) hayato.setExpression("neutral");
+  const u = new SpeechSynthesisUtterance(item.text);
   currentUtterance = u; // 参照を持っておかないと iPhone で onend が来なくなることがある
   const v = currentVoice();
   if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "ja-JP"; }
   u.rate = Number(els.rate.value);
   u.pitch = Number(els.pitch.value);
+  u.onstart = () => hayato.setTalking(true);
   u.onboundary = () => { speechLevel = 1; };
   u.onend = () => speakNext();
   u.onerror = () => speakNext();
@@ -145,6 +162,7 @@ function speakNext() {
 function stopSpeaking() {
   speakQueue = [];
   speaking = false;
+  hayato.setTalking(false);
   synth?.cancel();
 }
 
@@ -274,26 +292,63 @@ async function send(text) {
   let pending = ""; // まだ読み上げていない文の断片
   let bubble = null; // ログ上の今の返答の吹き出し（ツール実行をはさむと新しい吹き出しにする）
   let failure = null;
+  let tagBuf = ""; // 途中で切れた [face:...] タグの断片
+  let nextExpression = null; // 次に読み上げる文に付ける表情
 
   const flushSentences = (force = false) => {
     // 句点・感嘆符・改行で区切って、文ごとに読み上げを始める（全文を待たないので応答が速く感じる）
     const re = /[^。！？!?\n]*[。！？!?\n]+/g;
     let m, last = 0;
-    while ((m = re.exec(pending))) { enqueueSpeech(m[0]); last = re.lastIndex; }
+    while ((m = re.exec(pending))) { enqueueSpeech(m[0], nextExpression); nextExpression = null; last = re.lastIndex; }
     pending = pending.slice(last);
-    if (force && pending.trim()) { enqueueSpeech(pending); pending = ""; }
+    if (force && (pending.trim() || nextExpression)) { enqueueSpeech(pending, nextExpression); nextExpression = null; pending = ""; }
+  };
+
+  // 返答に混ざる [face:smile] などの表情タグを取り除き、表情として使う
+  const stripTags = (chunk, final = false) => {
+    let input = tagBuf + chunk;
+    tagBuf = "";
+    let out = "";
+    for (;;) {
+      const open = input.indexOf("[");
+      if (open < 0) { out += input; break; }
+      out += input.slice(0, open);
+      const rest = input.slice(open);
+      const close = rest.indexOf("]");
+      if (close < 0) {
+        if (!final && rest.length < 24) tagBuf = rest; else out += rest;
+        break;
+      }
+      const tag = rest.slice(1, close).match(/^face:\s*(\w+)$/);
+      if (tag && EXPRESSION_NAMES.includes(tag[1])) {
+        // 表情が変わる前の文は先に読み上げ待ちに入れておく
+        if (pending.trim()) { enqueueSpeech(pending, nextExpression); pending = ""; }
+        nextExpression = tag[1];
+      } else if (!tag) {
+        out += rest.slice(0, close + 1);
+      }
+      input = rest.slice(close + 1);
+    }
+    return out;
+  };
+
+  const addText = (text) => {
+    if (!text) return;
+    if (!reply) text = text.replace(/^\s+/, "");
+    reply += text;
+    pending += text;
+    els.hayatoText.textContent = reply;
+    bubble ??= addLog("assistant", "");
+    bubble.textContent += text;
+    flushSentences();
   };
 
   const onEvent = (ev) => {
     if (controller.signal.aborted) return;
     if (ev.type === "text") {
-      reply += ev.text;
-      pending += ev.text;
-      els.hayatoText.textContent = reply;
-      bubble ??= addLog("assistant", "");
-      bubble.textContent += ev.text;
-      flushSentences();
+      addText(stripTags(ev.text));
     } else if (ev.type === "tool") {
+      addText(stripTags("", true));
       flushSentences(true);
       if (!speaking) setState("thinking");
       els.activity.textContent = `${ev.label}…`;
@@ -317,6 +372,7 @@ async function send(text) {
       enqueueSpeech(failure.message);
       if (failure.kind === "auth") els.settings.showModal();
     } else {
+      addText(stripTags("", true));
       flushSentences(true);
     }
   } finally {
@@ -432,7 +488,7 @@ els.pitch.addEventListener("input", () => { els.pitchOut.textContent = els.pitch
 els.testVoice.addEventListener("click", () => {
   unlockAudio();
   stopSpeaking();
-  enqueueSpeech("準備はできています。いつでもどうぞ。");
+  enqueueSpeech("準備オッケーだ。いつでも呼んでくれ！", "smile");
 });
 
 // メモとタスクのバックアップ（機種変更や、万一消えたときのため）
@@ -469,10 +525,23 @@ els.importFile.addEventListener("change", async () => {
   }
 });
 
+// 起動時のあいさつ（表示だけ。iPhoneは画面を触るまで声を出せない）
+function greeting() {
+  const h = new Date().getHours();
+  const name = settings.callName || "相棒";
+  if (h < 5) return `${name}、夜更かしか？ 付き合うぜ。`;
+  if (h < 11) return `おはよう、${name}！ 今日も一緒にいこうぜ。`;
+  if (h < 18) return `よう、${name}！ 何から片付ける？`;
+  return `おつかれ、${name}！ 今日はどうだった？`;
+}
+els.hayatoText.textContent = greeting();
+hayato.setExpression("smile");
+setTimeout(() => { if (state === "idle") hayato.setExpression("neutral"); }, 5000);
+
 // 初回: APIキーが無ければ設定を開く
 if (!settings.apiKey) {
   setState("idle", "まず設定");
-  els.hayatoText.textContent = "はじめまして、ハヤトです。右上の設定でClaudeのAPIキーを入力してください。";
+  els.hayatoText.textContent = "はじめまして、ハヤトだ！ 右上の設定でClaudeのAPIキーを入れてくれ。それで俺は動けるようになる。";
   refreshMemoryCount();
   els.settings.showModal();
 }
