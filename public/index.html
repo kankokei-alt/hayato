@@ -56,10 +56,17 @@
     <div class="log-body" id="logBody"></div>
   </aside>
 
+  <form class="text-input" id="textForm" autocomplete="off" hidden>
+    <input id="textInput" type="text" placeholder="文字で話しかける" enterkeyhint="send" aria-label="メッセージ">
+    <button type="submit" class="send-btn" aria-label="送信">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+  </form>
+
   <footer class="controls">
-    <form class="text-input" id="textForm" autocomplete="off">
-      <input id="textInput" type="text" placeholder="文字で話しかける" enterkeyhint="send" aria-label="メッセージ">
-    </form>
+    <button class="icon-btn" id="keyboardBtn" aria-label="文字で入力" title="文字で入力" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
+    </button>
     <button class="mic" id="micBtn" aria-label="話しかける">
       <span class="mic-ring" aria-hidden="true"></span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
@@ -75,7 +82,7 @@
       <h2>設定</h2>
       <label class="field">
         <span>パスコード</span>
-        <input type="password" id="passcode" autocomplete="current-password" placeholder="サーバーで設定した HAYATO_PASSCODE">
+        <input type="password" id="passcode" autocomplete="current-password" placeholder="PCの .env の HAYATO_PASSCODE">
       </label>
       <label class="field">
         <span>声</span>
@@ -95,6 +102,7 @@
           <span id="calStatus" class="muted">確認中…</span>
           <button type="button" class="text-btn" id="calConnect">接続する</button>
         </div>
+        <small id="calHint" class="muted" hidden>接続はPCで行います。PCのブラウザで http://localhost:3000 を開き、設定から「接続する」を押してください。</small>
       </div>
       <div class="row end">
         <button type="button" class="text-btn" id="testVoice">声をテスト</button>

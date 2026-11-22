@@ -10,7 +10,8 @@ const els = {
   settings: $("settings"), settingsBtn: $("settingsBtn"), passcode: $("passcode"),
   voiceSelect: $("voiceSelect"), rate: $("rate"), rateOut: $("rateOut"),
   pitch: $("pitch"), pitchOut: $("pitchOut"), testVoice: $("testVoice"),
-  calStatus: $("calStatus"), calConnect: $("calConnect"), brandName: $("brandName"),
+  calStatus: $("calStatus"), calConnect: $("calConnect"), calHint: $("calHint"), brandName: $("brandName"),
+  keyboardBtn: $("keyboardBtn"),
 };
 
 // ---------- 端末ごとの設定（localStorage は使えないこともあるので必ず try で囲む） ----------
@@ -47,7 +48,14 @@ function setState(next, activity) {
   state = next;
   document.body.dataset.state = next;
   els.stateLabel.textContent = STATE_TEXT[next];
-  if (activity !== undefined) els.activity.textContent = activity;
+  if (activity === undefined) return;
+  // 長い案内はリングの中に収まらないので、下の字幕エリアに出す
+  if (activity.length > 20) {
+    els.activity.textContent = "";
+    els.hayatoText.textContent = activity;
+  } else {
+    els.activity.textContent = activity;
+  }
 }
 
 // ---------- 音声合成（読み上げ） ----------
@@ -56,6 +64,7 @@ let voices = [];
 let speakQueue = [];
 let speaking = false;
 let speechLevel = 0; // コアのアニメーション用
+let currentUtterance = null;
 
 function pickDefaultVoice() {
   const ja = voices.filter((v) => v.lang?.toLowerCase().startsWith("ja"));
@@ -120,6 +129,7 @@ function speakNext() {
   speaking = true;
   setState("speaking");
   const u = new SpeechSynthesisUtterance(text);
+  currentUtterance = u; // 参照を持っておかないと iPhone で onend が来なくなることがある
   const v = currentVoice();
   if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "ja-JP"; }
   u.rate = Number(els.rate.value);
@@ -138,11 +148,17 @@ function stopSpeaking() {
 
 // 返答の受信が終わり、読み上げも終わったら待機に戻る（連続会話なら聞き取り再開）
 let streamDone = true;
+let lastError = null; // エラーを読み上げたあとも画面に残しておく
 function maybeFinishSpeaking() {
   if (!streamDone || speaking) return;
   if (state === "error") return;
+  if (lastError) {
+    setState("error", lastError);
+    lastError = null;
+    return; // エラーのあとは自動で聞き取りを再開しない
+  }
   setState("idle", "マイクをタップ");
-  if (els.autoListen.checked && recognition) setTimeout(() => { if (state === "idle") startListening(); }, 350);
+  if (els.autoListen.checked && recognition && !recognitionBroken) setTimeout(() => { if (state === "idle") startListening(); }, 350);
 }
 
 // iOS は最初のタップで一度 speak しないと、後から読み上げられない
@@ -156,9 +172,23 @@ function unlockAudio() {
 }
 
 // ---------- 音声認識 ----------
+// iPhone の Safari は Siri の音声入力を使う。Safari 版と、ホーム画面に追加したアプリ版で挙動が違うことがあるので、
+// 使えないと分かったらキーボードの音声入力（マイクキー）に切り替えるよう案内する。
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const isStandalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 let recognition = null;
-let finalTranscript = "";
+let recognitionBroken = false;
+let heardText = "";
+let silenceTimer = null;
+const SILENCE_MS = 1400; // この時間しゃべらなければ話し終わりとみなす
+
+function recognitionUnavailable(reason) {
+  recognitionBroken = true;
+  showTextInput(true);
+  setState("error", reason);
+  addLog("error", reason);
+}
+
 if (Recognition) {
   recognition = new Recognition();
   recognition.lang = "ja-JP";
@@ -167,45 +197,65 @@ if (Recognition) {
   recognition.maxAlternatives = 1;
 
   recognition.onresult = (e) => {
-    let interim = "";
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const r = e.results[i];
-      if (r.isFinal) finalTranscript += r[0].transcript;
-      else interim += r[0].transcript;
-    }
-    els.youText.textContent = finalTranscript + interim;
+    // iPhone は確定フラグ（isFinal）が付かないまま終わることがあるので、毎回全体を組み立て直す
+    let text = "";
+    for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+    heardText = text;
+    els.youText.textContent = text;
     speechLevel = 0.8;
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(stopListening, SILENCE_MS);
   };
   recognition.onerror = (e) => {
+    clearTimeout(silenceTimer);
     if (e.error === "no-speech" || e.error === "aborted") return;
-    const msg = e.error === "not-allowed" ? "マイクの使用が許可されていません" : `音声認識エラー: ${e.error}`;
-    setState("error", msg);
+    if (e.error === "service-not-allowed") {
+      recognitionUnavailable(
+        isStandalone
+          ? "この画面では音声認識が使えないようです。下のキーボードのマイクキーで話すか、Safariで開いてください"
+          : "音声認識が使えません。iPhoneの設定 → Siri で「Siriに話しかける」または音声入力をオンにしてください",
+      );
+      return;
+    }
+    if (e.error === "not-allowed") {
+      setState("error", "マイクが許可されていません。iPhoneの設定 → アプリ → Safari → マイク を「許可」にしてください");
+      return;
+    }
+    setState("error", `音声認識エラー: ${e.error}`);
   };
   recognition.onend = () => {
+    clearTimeout(silenceTimer);
     if (state !== "listening") return;
-    const text = finalTranscript.trim();
+    const text = heardText.trim();
     if (text) send(text);
     else setState("idle", "聞き取れませんでした。もう一度どうぞ");
   };
 } else {
-  els.activity.textContent = "このブラウザは音声認識に未対応です。文字で話しかけてください";
+  recognitionBroken = true;
+  els.hayatoText.textContent = "音声認識が使えません。左下のキーボードボタンから、キーボードのマイクキーで話しかけてください";
 }
 
 function startListening() {
-  if (!recognition) return;
+  if (!recognition || recognitionBroken) {
+    showTextInput(true);
+    els.textInput.focus();
+    return;
+  }
   stopSpeaking();
-  finalTranscript = "";
+  heardText = "";
   els.youText.textContent = "";
   setState("listening", "お話しください");
   try { recognition.start(); } catch { /* 既に開始済み */ }
 }
 
 function stopListening() {
+  clearTimeout(silenceTimer);
   try { recognition?.stop(); } catch { /* noop */ }
 }
 
 // ---------- サーバーとの通信 ----------
 let currentRequest = null;
+const OFFLINE_MESSAGE = "パソコンのハヤトにつながりません。パソコンが起動していて、ハヤトとTailscaleが動いているか確認してください";
 
 async function send(text) {
   currentRequest?.abort();
@@ -278,15 +328,16 @@ async function send(text) {
     flushSentences(true);
   } catch (err) {
     if (controller.signal.aborted) return;
+    if (err instanceof TypeError) err = new Error(OFFLINE_MESSAGE); // fetch 自体が失敗 = サーバーに届かない
     stopSpeaking();
     setState("error", err.message);
     addLog("error", err.message);
+    lastError = err.message;
     enqueueSpeech(err.message);
   } finally {
     if (currentRequest === controller) currentRequest = null;
     streamDone = true;
-    if (!speaking && state !== "error") maybeFinishSpeaking();
-    else if (state === "error") setTimeout(() => { if (state === "error" && !speaking) setState("idle"); }, 4000);
+    if (!speaking) maybeFinishSpeaking();
   }
 }
 
@@ -302,7 +353,8 @@ function addLog(kind, text) {
 // ---------- 操作 ----------
 els.mic.addEventListener("click", () => {
   unlockAudio();
-  if (!recognition) { els.textInput.focus(); return; }
+  keepScreenOn();
+  if (!recognition || recognitionBroken) { startListening(); return; }
   if (state === "listening") { stopListening(); return; }
   // 考え中・話し中にタップしたら割り込んで聞き取りへ
   currentRequest?.abort();
@@ -311,9 +363,42 @@ els.mic.addEventListener("click", () => {
   startListening();
 });
 
+function showTextInput(show) {
+  els.textForm.hidden = !show;
+  els.keyboardBtn.setAttribute("aria-pressed", String(show));
+}
+els.keyboardBtn.addEventListener("click", () => {
+  const show = els.textForm.hidden;
+  showTextInput(show);
+  if (show) els.textInput.focus();
+});
+
+// 会話中に画面が消えないようにする（対応していない端末では何もしない）
+let wakeLock = null;
+async function keepScreenOn() {
+  try {
+    if (!wakeLock && "wakeLock" in navigator) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    }
+  } catch { /* 非対応・拒否されても会話はできる */ }
+}
+
+// アプリを閉じた・裏に回したら、話すのと聞くのをやめる
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    stopListening();
+    stopSpeaking();
+    if (state === "listening" || state === "speaking") setState("idle", "マイクをタップ");
+  } else if (state !== "idle") {
+    keepScreenOn();
+  }
+});
+
 els.textForm.addEventListener("submit", (e) => {
   e.preventDefault();
   unlockAudio();
+  keepScreenOn();
   const text = els.textInput.value.trim();
   if (!text) return;
   els.textInput.value = "";
@@ -373,11 +458,14 @@ async function refreshStatus() {
     const s = await res.json();
     if (s.name) els.brandName.textContent = s.name === "ハヤト" ? "HAYATO" : s.name;
     els.calStatus.textContent = !s.calendar.configured ? "サーバー側で未設定" : s.calendar.connected ? "接続済み" : "未接続";
-    els.calConnect.hidden = !s.calendar.configured;
+    const onPc = ["localhost", "127.0.0.1"].includes(location.hostname);
+    // Google のログインはPCのブラウザ（localhost）で行う。スマホからは案内だけ出す
+    els.calConnect.hidden = !s.calendar.configured || !onPc;
+    els.calHint.hidden = !s.calendar.configured || onPc || s.calendar.connected;
     els.calConnect.textContent = s.calendar.connected ? "接続し直す" : "接続する";
     return true;
   } catch {
-    els.calStatus.textContent = "サーバーに接続できません";
+    els.calStatus.textContent = "パソコンのハヤトにつながりません";
     return false;
   }
 }
@@ -388,7 +476,7 @@ async function refreshStatus() {
   if (!ok) {
     try {
       const r = await (await fetch("api/auth-required")).json();
-      if (r.required) { els.activity.textContent = "右上の設定でパスコードを入力してください"; els.settings.showModal(); }
+      if (r.required) { els.activity.textContent = "パスコードを入力"; els.settings.showModal(); }
     } catch { /* noop */ }
   }
 })();

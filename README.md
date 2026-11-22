@@ -1,11 +1,11 @@
 # ハヤト — 音声で話せるパーソナルAIエージェント
 
-スマホに話しかけると、AIエージェント「ハヤト」が声で答えます。
+iPhoneに話しかけると、AIエージェント「ハヤト」が声で答えます。
 調べもの、Googleカレンダーの予定確認・登録、メモやタスク管理を、会話しながら任せられます。
 
 - 頭脳: Claude（Anthropic の Claude API）
-- 声: スマホ・PCのブラウザに内蔵された音声認識と読み上げ（追加料金なし）
-- 形: ホーム画面に追加してアプリのように使える Web アプリ（PWA）
+- 声: iPhoneに内蔵された音声認識と読み上げ（追加料金なし）
+- 形: iPhoneのホーム画面に追加してアプリのように使う Web アプリ（PWA）。頭脳となるサーバーは自分のパソコンで動かす
 
 ## できること
 
@@ -20,75 +20,100 @@
 画面中央のコアは状態で色と動きが変わります。青: 待機・聞き取り中、橙: 分析中（考え中・ツール実行中）、緑: 話している。
 話している最中にマイクを押すと、割り込んで次の話を聞き取ります。「連続会話」をオンにすると、返答のあと自動で聞き取りを再開します。
 
+## 使い方の全体像
+
+**iPhoneで話しかけ、パソコンが裏で頭脳（サーバー）として働く**形です。パソコンにマイクは要りません。
+
+```
+iPhone（ハヤトのアプリ画面）  ──Tailscale（自分の端末だけの安全な通信）──▶  パソコン（ハヤトのサーバー）──▶ Claude
+```
+
+- ハヤトを使うときは、パソコンを起動したままにしておきます（スリープさせない）
+- iPhoneとパソコンは **Tailscale** という無料のアプリでつなぎます。自宅の外（4G/5G）からでも使え、つながるのは自分の端末だけです。URLが毎回変わらないので、ホーム画面のアイコンがずっと使えます
+
 ## はじめかた
 
-### 1. 準備
+### 1. パソコンの準備（最初の1回だけ）
 
-- Node.js 20 以上
-- Claude API キー: https://console.anthropic.com で発行（利用料は従量課金です）
+1. [Node.js](https://nodejs.org/ja)（LTS版）をインストール
+2. このフォルダを好きな場所に置く
+3. [Claude API キー](https://console.anthropic.com)を発行する（利用料は従量課金です）
+4. `.env.example` をコピーして `.env` という名前にし、メモ帳などで開いて次の2つを書く
+   - `ANTHROPIC_API_KEY=` … 3で発行したキー
+   - `HAYATO_PASSCODE=` … 好きな合言葉（iPhone側で1回だけ入力します）
+
+### 2. ハヤトを起動する
+
+- **Windows**: `start-hayato.bat` をダブルクリック
+- **Mac**: `start-hayato.command` をダブルクリック（Macは起動中スリープしなくなります）
+
+黒い画面に「ハヤト 起動」と出たら動いています。この画面は閉じずにおきます。
+Windows は「設定 → システム → 電源」でスリープを「なし」にしておいてください。
+
+### 3. Tailscaleでつなぐ（最初の1回だけ）
+
+1. [Tailscale](https://tailscale.com/download) をパソコンとiPhoneの両方にインストールし、同じアカウントでログイン
+2. [Tailscale の管理画面](https://login.tailscale.com/admin/dns) の DNS ページで **MagicDNS** と **HTTPS Certificates** を有効にする
+3. パソコンでターミナル（WindowsはPowerShell）を開いて、次を実行
 
 ```bash
-npm install
-cp .env.example .env
-# .env を開いて ANTHROPIC_API_KEY と HAYATO_PASSCODE を書く
-npm start
+tailscale serve --bg 3000
 ```
 
-PC のブラウザ（Chrome 推奨）で http://localhost:3000 を開き、マイクボタンを押して話しかけます。
+`https://<パソコン名>.<名前>.ts.net` というURLが表示されます（あとで `tailscale serve status` でも確認できます）。
+`--bg` を付けたので、この設定はパソコンを再起動しても残ります。
 
-### 2. スマホで使う
+### 4. iPhoneにハヤトを入れる（最初の1回だけ）
 
-スマホのブラウザでマイクを使うには **HTTPS** の URL が必要です。次のどちらかで公開してください。
+1. iPhoneの Tailscale アプリをオンにする
+2. Safari で手順3のURLを開く
+3. 共有ボタン →「ホーム画面に追加」
+4. ホーム画面のハヤトのアイコンから起動し、右上の設定でパスコードを入力
+5. マイクボタンを押して話しかける（初回はマイクと音声認識の許可を求められます）
 
-**A. 手元の PC を一時的に公開（手軽）**
-[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) を使うと、`https://xxxx.trycloudflare.com` のような URL がすぐ発行されます。
+### iPhoneでうまくいかないとき
 
-```bash
-npm start
-# 別のターミナルで
-cloudflared tunnel --url http://localhost:3000
-```
+| 症状 | 対処 |
+|---|---|
+| 「音声認識が使えないようです」と出る | iPhoneの設定 → Siri で音声入力（Siri）をオンにする。ホーム画面アプリ版で使えない場合は、Safariで同じURLを開いて使うか、左下のキーボードボタン → キーボードのマイクキーで話す |
+| 「マイクが許可されていません」 | 設定 → アプリ → Safari → マイク を「許可」に |
+| 「パソコンのハヤトにつながりません」 | パソコンが起動しているか、ハヤトの黒い画面が開いているか、iPhoneのTailscaleがオンかを確認 |
+| 声が小さい・受話口から聞こえる | マイク使用直後にiPhoneが通話用のスピーカーに切り替えることがあります。音量ボタンで上げるか、イヤホンを使う |
+| 声が機械的 | 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 日本語 で「拡張」や「プレミアム」の声をダウンロードし、ハヤトの設定で選ぶ |
+| 話の途中で切られる | 1.4秒黙ると話し終わりとみなします。続けて話すか、キーボード入力を使う |
 
-**B. クラウドに置く（常時使う）**
-Render、Railway、Fly.io などの Node.js が動くサービスにデプロイし、環境変数に `.env` と同じ値を設定します。メモやカレンダーのログイン情報は `data/` フォルダに保存されるので、永続ディスクを `data/` に割り当ててください。
+### 5. Googleカレンダーをつなぐ（任意・最初の1回だけ）
 
-スマホで URL を開いたら:
-1. 右上の設定でパスコード（`HAYATO_PASSCODE`）を入力
-2. iPhone は Safari の「共有 → ホーム画面に追加」、Android は Chrome のメニュー「ホーム画面に追加」
-3. ホーム画面のアイコンから起動して、マイクをタップ
-
-> 公開するときは必ず `HAYATO_PASSCODE` を設定してください。設定しないと、URL を知っている人が誰でもあなたの API キーでハヤトを使えてしまいます。
-
-### 3. Googleカレンダーをつなぐ（任意）
+Googleへのログインはパソコンのブラウザで行います。一度つなげば、iPhoneから予定を聞いたり登録したりできます。
 
 1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作り、「Google Calendar API」を有効にする
-2. 「APIとサービス → OAuth 同意画面」を設定（自分だけで使うならテストユーザーに自分のアドレスを追加）
-3. 「認証情報 → OAuth クライアント ID」を **ウェブアプリケーション** で作成し、承認済みリダイレクト URI に
-   `http://localhost:3000/auth/google/callback`（公開 URL で使うなら `https://<URL>/auth/google/callback`）を登録
-4. 発行されたクライアント ID とシークレットを `.env` の `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` に書き、`GOOGLE_REDIRECT_URI` を手順3と同じ URL にする
-5. サーバーを再起動し、アプリの設定画面で「接続する」を押して Google にログイン
+2. 「APIとサービス → OAuth 同意画面」を設定し、テストユーザーに自分のGoogleアカウントを追加
+3. 「認証情報 → OAuth クライアント ID」を **ウェブアプリケーション** で作り、承認済みリダイレクト URI に `http://localhost:3000/auth/google/callback` を登録
+4. 発行されたクライアント ID とシークレットを `.env` の `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` に書いて、ハヤトを再起動
+5. **パソコンのブラウザ**で http://localhost:3000 を開き、右上の設定 →「接続する」でGoogleにログイン
 
 ## カスタマイズ
 
 - **性格・話し方**: `server/persona.ts` のシステムプロンプトを書き換えます
 - **名前と呼び方**: `.env` の `HAYATO_NAME`、`HAYATO_USER_CALL_NAME`
-- **声**: アプリの設定画面で端末の音声・速さ・高さを選べます（iPhone は「設定 → アクセシビリティ → 読み上げコンテンツ → 声」で高品質な日本語音声を追加すると自然になります）
+- **声**: アプリの設定画面で音声・速さ・高さを選べます
 - **考える深さ**: `.env` の `HAYATO_EFFORT`（low が最速。複雑な依頼が多いなら medium）
 - **新しい仕事を覚えさせる**: `server/tools/` にツールを追加し、`server/agent.ts` の `localTools` に登録します
 
 ## しくみ
 
 ```
-スマホ（PWA）                         サーバー（Node.js）                 Claude API
- マイク → 音声認識(ブラウザ内蔵) ──文字──▶ /api/chat ──────────────────▶ Claude
+iPhone（PWA）                         パソコン（Node.js）                 Claude API
+ マイク → 音声認識(iPhone内蔵) ──文字──▶  /api/chat ──────────────────▶ Claude
                                          │   ◀── ツール呼び出し ──────┤
                                          ├─ メモ/タスク (data/memory.json)
                                          ├─ Googleカレンダー
- 読み上げ(ブラウザ内蔵) ◀──文字(逐次)──── │   （Web検索は Claude 側で実行）
+ 読み上げ(iPhone内蔵) ◀──文字(逐次)───── │   （Web検索は Claude 側で実行）
 ```
 
 - 返答はストリーミングで届き、一文ごとに読み上げを始めるので待ち時間が短く感じられます
-- 会話履歴はサーバーのメモリ上にあり、サーバーを再起動するとリセットされます（メモとタスクは `data/` に残ります）
+- 会話履歴はパソコンのメモリ上にあり、ハヤトを再起動するとリセットされます（メモとタスクは `data/` に残ります）
+- サーバーはパソコンの中（127.0.0.1）でだけ待ち受け、外からは Tailscale 経由でしか届きません
 
 ## ファイル構成
 
@@ -99,5 +124,6 @@ server/
   persona.ts        ハヤトの人格（システムプロンプト）
   tools/memory.ts   メモ・タスク
   tools/calendar.ts Googleカレンダー
-public/             スマホ画面（PWA）
+public/             iPhoneの画面（PWA）
+start-hayato.*      ダブルクリックで起動するファイル（Windows / Mac）
 ```

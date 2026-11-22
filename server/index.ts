@@ -7,6 +7,9 @@ import { ASSISTANT_NAME } from "./persona.js";
 import { calendarConfigured, calendarConnected, googleAuthUrl, handleGoogleCallback } from "./tools/calendar.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
+// 既定ではこのPCの中からしか接続できない。スマホからは Tailscale（tailscale serve）経由で安全につなぐ
+// localhost は IPv4/IPv6 どちらに解決されることもあるので、未指定なら両方で待ち受ける
+const HOSTS = process.env.HOST ? [process.env.HOST] : ["127.0.0.1", "::1"];
 const PASSCODE = process.env.HAYATO_PASSCODE ?? "";
 
 const app = express();
@@ -101,10 +104,22 @@ app.get("/auth/google/callback", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`${ASSISTANT_NAME} 起動: http://localhost:${PORT}`);
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    console.warn("警告: ANTHROPIC_API_KEY が設定されていません（.env を確認）");
-  }
-  if (!PASSCODE) console.warn("注意: HAYATO_PASSCODE 未設定。インターネットに公開する場合は必ず設定してください。");
-});
+let announced = false;
+for (const host of HOSTS) {
+  const server = app.listen(PORT, host, () => {
+    if (announced) return;
+    announced = true;
+    console.log(`${ASSISTANT_NAME} 起動: http://localhost:${PORT}`);
+    console.log("スマホからは Tailscale のURL（https://<PC名>.<tailnet名>.ts.net）で開いてください");
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+      console.warn("警告: ANTHROPIC_API_KEY が設定されていません（.env を確認）");
+    }
+    if (!PASSCODE) console.warn("注意: HAYATO_PASSCODE が未設定です。.env で設定してください。");
+  });
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    // IPv6 が無効なPCでは ::1 で待ち受けられないが、IPv4 で動いていれば問題ない
+    if (host === "::1" && (err.code === "EADDRNOTAVAIL" || err.code === "EAFNOSUPPORT")) return;
+    console.error(err.code === "EADDRINUSE" ? `ポート ${PORT} は使用中です。ハヤトが既に起動していないか確認してください。` : err);
+    process.exit(1);
+  });
+}
